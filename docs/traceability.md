@@ -157,3 +157,42 @@ flowchart LR
 | CMP-U03 Diagnostics | — | FR-13, NFR-05, NFR-07 | CC-05 |
 | CMP-U04 LinearSolve | — | FR-09, FR-11, FR-19, FR-23 | CC-02〜CC-04, CC-07 |
 | CMP-U05 VectorSpace | — | FR-18, FR-20, FR-21 | CC-07, CC-08 |
+
+## T.8 機能要件 → 外部インターフェース
+
+| FR | API | EXT | ERR |
+| --- | --- | --- | --- |
+| FR-01 次元つきの量 | API-02, API-20, API-25 | — | ERR-01 |
+| FR-02 単位系の定義 | API-05, API-06, API-07 | EXT-01 | — |
+| FR-03 単位を指定した入出力 | API-20, API-21, API-23 | EXT-02 | ERR-02 |
+| FR-04 空間の定義 | API-11 | EXT-03 | — |
+| FR-05 座標系の定義 | API-03, API-10, API-11 | EXT-04 | — |
+| FR-06 任意の階数のテンソル | API-01, API-02, API-03, API-21, API-34 | — | ERR-03 |
+| FR-07 縮約 | API-08, API-27, API-28, API-30 | — | ERR-04, ERR-05, ERR-06, ERR-07, ERR-08 |
+| FR-08 足し算・外積・トレース | API-25, API-26, API-29 | — | ERR-01, ERR-03, ERR-13 |
+| FR-09 計量と上げ下げ | API-09, API-11, API-31 | EXT-06 | ERR-09 |
+| FR-10 対称性 | API-04, API-22, API-33 | — | ERR-12, ERR-13 |
+| FR-11 座標系の変換 | API-11, API-32 | EXT-05 | ERR-10 |
+| FR-12 成分の取り出し | API-24 | — | ERR-11 |
+| FR-13 エラー文 | — | — | ERR-01〜ERR-15 |
+| FR-14 例題 | §2a.2 の使い方の例 | — | — |
+| FR-18 常微分方程式 | API-12, API-13, API-40, API-41, API-42, API-43, API-44, API-45 | EXT-07 | ERR-14, ERR-15 |
+| FR-19 硬い常微分方程式 | API-42 | EXT-07 | — |
+| FR-20 定積分 | API-14, API-46, API-47, API-48 | EXT-07 | — |
+| FR-21 数値微分 | API-15, API-49 | EXT-07 | — |
+| FR-22 誤差の許容値と失敗の知らせ | API-43, API-44, API-47, API-48 | — | ERR-15 |
+
+将来の FR（FR-15〜FR-17、FR-23、FR-24）は、外部インターフェースをまだ持たない。
+
+## T.9 外部から利用するもの → 要件
+
+| USE | 要件 |
+| --- | --- |
+| USE-01 Rust と `core` | NFR-01 |
+| USE-02 診断機能 | FR-13, NFR-05 |
+| USE-03 workspace | NFR-01（01 §1.8） |
+| USE-04 コンパイル失敗のテスト | NFR-08 |
+| USE-05 ベンチマーク | NFR-02, NFR-04 |
+| USE-06 GitHub Actions | NFR-11, NFR-13, NFR-14 |
+| USE-07 Python 3 | NFR-11, NFR-13 |
+| USE-08 Dependabot、secret scanning | NFR-14 |
