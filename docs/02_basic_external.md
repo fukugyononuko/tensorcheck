@@ -13,7 +13,7 @@
 
 | 前提 | 結果 |
 | --- | --- |
-| ラベルが同じかを型の計算で判定し、縮約の相手を見つけて、結果の枠の並びを型として求められる | できた。$g_{ab} V^b$ は「$a$ が下付き」、$T^a{}_c W^c$ は「$a$ が上付き」の型になった。ラベルに型レベルの番号を持たせ、番号の一致を trait で判定する |
+| ラベルが同じかを型の計算で判定し、縮約の相手を見つけて、結果の枠の並びを型として求められる | できた。$`g_{ab} V^b`$ は「$`a`$ が下付き」、$`T^a{}_c W^c`$ は「$`a`$ が上付き」の型になった。ラベルに型レベルの番号を持たせ、番号の一致を trait で判定する |
 | `#[diagnostic::on_unimplemented]` で、誤りの見出しを決めた文にできる | できた。下付きどうしの縮約で、決めた見出し・ラベル・補足がエラーの先頭に出た |
 | エラー文に、利用者のつけたラベルの名前が出る | 番号の型（`S<Z>` など）のままでは読めない。ラベルを名前つきの型（`b` など）にし、その型をエラー文に渡す（2a.4） |
 
@@ -30,7 +30,7 @@
 | API-03 | `tensorcheck::{Up, Down}` | 枠の型。`Up<C>` は座標系 `C` の上付き、`Down<C>` は下付き。空間は `C` から決まる | E02 |
 | API-04 | `tensorcheck::{NoSym, Symmetric, Antisymmetric}` | 対称性の型 | E04 |
 | API-05 | `tensorcheck::units::si` | SI の単位系、次元の別名（`Length`、`Time`、`Velocity`、`Force` など）、単位（`m`、`km`、`s`、`kg`、`N`、`J` など） | E01 |
-| API-06 | `tensorcheck::units::natural` | 自然単位系（$\hbar = c = 1$）。次元の別名（`Mass`、`Dimensionless` など）と単位（`eV`、`GeV`、`reduced_planck_mass` など） | E01 |
+| API-06 | `tensorcheck::units::natural` | 自然単位系（$`\hbar = c = 1`$）。次元の別名（`Mass`、`Dimensionless` など）と単位（`eV`、`GeV`、`reduced_planck_mass` など） | E01 |
 | API-07 | `tensorcheck::dim::{Prod, Quot, Pow}` | 次元から次元を作る型（例：`Quot<Length, Time>` は速度） | E01 |
 | API-08 | `tensorcheck::labels` | 用意したラベル：`a`〜`h`、`i`〜`n`、`mu`、`nu`、`rho`、`sigma`、`alpha`、`beta`、`I`〜`N`。利用者がラベルを足すマクロ `label!` | E02 |
 | API-09 | `tensorcheck::slot::{_0, _1, _2, _3}` | 上げ下げで、どの枠かを指定する印 | E02 |
@@ -68,23 +68,23 @@
 | ID | 書き方 | 意味 | 対応する操作（2b） |
 | --- | --- | --- | --- |
 | API-50 | `Christoffel<C, N>` | Christoffel 記号の型。`Tensor<Dimensionless, (Up<C>, Down<C>, Down<C>), NoSym, ChartBound, N>` の別名 | — |
-| API-51 | `geometry::christoffel(&metric, &p)` | 点 `p` での $\Gamma^a{}_{bc}$ | `christoffel` |
-| API-52 | `geometry::{riemann, ricci, ricci_scalar, einstein}(&metric, &p)` | 点 `p` での $R^a{}_{bcd}$、$R_{ab}$、$R$、$G_{ab}$ | `riemann` ほか |
-| API-53 | `geometry::curvature(&metric, &p)` | 同じ点の $g$、$\partial g$、$\partial\partial g$ を 1 回だけ求め、$\Gamma$ と曲率をまとめて返す | `riemann` ほか |
-| API-54 | `geometry::covariant_derivative(&field, &metric, &p)` | 点 `p` での $\nabla_c T^{a\cdots}{}_{b\cdots}$。結果は下付きの枠が 1 つ増えたテンソル | `covariant_derivative` |
+| API-51 | `geometry::christoffel(&metric, &p)` | 点 `p` での $`\Gamma^a{}_{bc}`$ | `christoffel` |
+| API-52 | `geometry::{riemann, ricci, ricci_scalar, einstein}(&metric, &p)` | 点 `p` での $`R^a{}_{bcd}`$、$`R_{ab}`$、$`R`$、$`G_{ab}`$ | `riemann` ほか |
+| API-53 | `geometry::curvature(&metric, &p)` | 同じ点の $`g`$、$`\partial g`$、$`\partial\partial g`$ を 1 回だけ求め、$`\Gamma`$ と曲率をまとめて返す | `riemann` ほか |
+| API-54 | `geometry::covariant_derivative(&field, &metric, &p)` | 点 `p` での $`\nabla_c T^{a\cdots}{}_{b\cdots}`$。結果は下付きの枠が 1 つ増えたテンソル | `covariant_derivative` |
 | API-55 | `field.at(&p)` | テンソル場を点で評価する（`f64` で） | — |
 
 ### 数値計算（M02）
 
 | ID | 書き方 | 意味 |
 | --- | --- | --- |
-| API-40 | `ode::solve_ivp(f, t0..t1, y0, method, tol)` | 1 階の常微分方程式 $dy/dt = f(t, y)$ を解く。`f` の戻り値の型は `<Y as VectorSpace>::Per<T>`（$y$ ÷ $[t]$） |
-| API-41 | `ode::solve_second_order(a, t0..t1, (x0, v0), method)` | 2 階の常微分方程式 $d^2x/dt^2 = a(t, x)$ を解く（leapfrog など） |
+| API-40 | `ode::solve_ivp(f, t0..t1, y0, method, tol)` | 1 階の常微分方程式 $`dy/dt = f(t, y)`$ を解く。`f` の戻り値の型は `<Y as VectorSpace>::Per<T>`（$`y`$ ÷ $`[t]`$） |
+| API-41 | `ode::solve_second_order(a, t0..t1, (x0, v0), method)` | 2 階の常微分方程式 $`d^2x/dt^2 = a(t, x)`$ を解く（leapfrog など） |
 | API-42 | `ode::{Rk4 { h }, DormandPrince54, Rosenbrock { jacobian }, Leapfrog { h }}` | 解法。`Rosenbrock` の `jacobian` は `Jacobian::Numerical` か、利用者の関数 |
 | API-43 | `ode::Tolerance { rtol, atol }` | 許容値。`rtol` は無次元の数、`atol` は状態と同じ型 |
 | API-44 | `ode::Solution { t, y, stats }`、`ode::SolveError` | 解と、失敗（`MaxSteps`、`StepTooSmall`、`NonFinite`）。失敗には起きた時刻を含める |
 | API-45 | `ode::solve_ivp_with(f, ..., on_step)` | 受け入れた各歩で呼ばれる関数を渡す（途中の値を記録するため） |
-| API-46 | `quad::integrate(f, a..b, method, tol)` | 定積分 $\int_a^b f(x)\,dx$。結果の型は `<Y as VectorSpace>::Times<X>`（$[f]\,[x]$） |
+| API-46 | `quad::integrate(f, a..b, method, tol)` | 定積分 $`\int_a^b f(x)\,dx`$。結果の型は `<Y as VectorSpace>::Times<X>`（$`[f]\,[x]`$） |
 | API-47 | `quad::{Trapezoid { n }, Simpson { n }, Romberg, GaussLegendre { n }, GaussKronrod}`、`quad::Tolerance { rtol, atol }` | 解法と許容値。`GaussKronrod` は適応型（7 点 Gauss、15 点 Kronrod）。`atol` は結果と同じ型 |
 | API-48 | `quad::Integral { value, error_estimate, evaluations }`、`quad::QuadError` | 結果と、失敗（`ToleranceNotMet`、`NonFinite`） |
 | API-49 | `diff::derivative(f, x, method)`、`diff::jacobian(f, y)` | 数値微分と Jacobi 行列。方式は `Central`、`Richardson` |
@@ -201,10 +201,10 @@ impl Metric for SphereMetric {
 | --- | --- | --- | --- | --- |
 | EXT-01 | `UnitSystem` | 基本次元の数（型レベルの整数）と、次元の名前（ドキュメントとエラー文用） | E01 | VOL-01 |
 | EXT-02 | `Unit` | 属する単位系、次元、基準の単位への換算係数 | E01 | VOL-02 |
-| EXT-03 | `Space` | 次元数 $n$（型レベルの整数）、名前 | E02 | VOL-03 |
+| EXT-03 | `Space` | 次元数 $`n`$（型レベルの整数）、名前 | E02 | VOL-03 |
 | EXT-04 | `Chart` | 属する空間、座標の型の並び、各座標の次元、名前 | E02 | VOL-04 |
-| EXT-05 | `ChartTransform` | 変換元と変換先の座標系、点の写し方、Jacobi 行列 $\partial x'^a / \partial x^b$。逆は省略できる（省略すると U04 で求める） | E02 | VOL-04 |
-| EXT-06 | `Metric` | 座標系、全体の次元、点での成分 $g_{ab}(x)$ を数値の型 `N` によらない形で。逆は省略できる | E03 | VOL-05 |
+| EXT-05 | `ChartTransform` | 変換元と変換先の座標系、点の写し方、Jacobi 行列 $`\partial x'^a / \partial x^b`$。逆は省略できる（省略すると U04 で求める） | E02 | VOL-04 |
+| EXT-06 | `Metric` | 座標系、全体の次元、点での成分 $`g_{ab}(x)`$ を数値の型 `N` によらない形で。逆は省略できる | E03 | VOL-05 |
 | EXT-08 | `TensorField` | 座標系、返すテンソルの型、点での成分を数値の型 `N` によらない形で | M03 | — |
 | EXT-07 | 関数（`Fn(T, &Y) -> Y::Per<T>` など） | 右辺、加速度、被積分関数、微分する関数、Jacobi 行列 | M02 | — |
 

@@ -13,7 +13,7 @@ As of 2026-10-12 (details: [docs/01_overview.md](docs/01_overview.md) §1.1, in 
 | Area | Crates | Difference |
 | --- | --- | --- |
 | Dimensions | uom, dimensioned, diman | Scalar dimensions only; no tensor structure. diman requires unstable Rust |
-| Tensors | differential-geometry | Closest match (dimension $n$ and coordinate systems as types), but no physical units, symmetry, or Einstein-convention contraction; not updated since 2019 |
+| Tensors | differential-geometry | Closest match (dimension $`n`$ and coordinate systems as types), but no physical units, symmetry, or Einstein-convention contraction; not updated since 2019 |
 | ODEs | diffsol, russell_ode, ode_solvers | State is a plain array of numbers, so dimension checks stop at the solver boundary |
 | Quadrature | bilby, integrate, quad-rs | Integrands return plain numbers |
 
