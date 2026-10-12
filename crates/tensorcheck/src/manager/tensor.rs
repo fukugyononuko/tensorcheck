@@ -4,13 +4,18 @@ use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
+use crate::access::component::SlotExtent;
 use crate::access::component::Slots;
 use crate::engine::dimension::{DimDiv, DimInfo, DimMul, Prod, Quot, Unit, from_base, to_base};
-use crate::engine::index::Tensorial;
+use crate::engine::index::{
+    AllAbsent, At, Chart, Contract, Contracted, Down, IntoLabels, KindMul, LabelIds, Slot,
+    StripLabels, Tensorial, Up, ZipLabels, contract,
+};
 use crate::engine::symmetry::NoSym;
-use crate::utility::diagnostics::{SameDimension, UnitMatches};
+use crate::utility::diagnostics::{CoordOf, LabelCount};
+use crate::utility::diagnostics::{SameDimension, SameKind, SameSlots, SameSymmetry, UnitMatches};
 use crate::utility::scalar::Scalar;
-use crate::utility::typelevel::{Cons, Nil};
+use crate::utility::typelevel::{Concat, Cons, Nil};
 
 /// A tensor with dimension `D`, index slots `S`, symmetry `Sym`, tensoriality `K`
 /// and component type `N` (API-01).
@@ -24,6 +29,10 @@ pub struct Tensor<D, S: Slots, Sym = NoSym, K = Tensorial, N: Scalar = f64> {
 
 /// A rank-0 tensor: a number with a physical dimension (API-02).
 pub type Quantity<D, N = f64> = Tensor<D, Nil, NoSym, Tensorial, N>;
+/// A vector (one upper index) in chart `C` (API-02).
+pub type Vector<D, C, N = f64> = Tensor<D, Cons<Up<C>, Nil>, NoSym, Tensorial, N>;
+/// A covector (one lower index) in chart `C` (API-02).
+pub type Covector<D, C, N = f64> = Tensor<D, Cons<Down<C>, Nil>, NoSym, Tensorial, N>;
 
 impl<D, S: Slots, Sym, K, N: Scalar> Clone for Tensor<D, S, Sym, K, N> {
     fn clone(&self) -> Self {
@@ -94,30 +103,30 @@ impl<D> Quantity<D> {
 }
 
 // ---------------------------------------------------------------------------
-// Addition and subtraction: same dimension (ERR-01). Slots, symmetry and
-// tensoriality must be identical types; their dedicated messages come in later phases.
+// Addition and subtraction: same dimension (ERR-01), slots (ERR-03), symmetry
+// (ERR-13) and tensoriality (ERR-17).
 
-impl<D1, D2, S: Slots, Sym, K, N: Scalar> Add<Tensor<D2, S, Sym, K, N>> for Tensor<D1, S, Sym, K, N>
-where
-    D1: SameDimension<D2>,
-{
-    type Output = Tensor<D1, S, Sym, K, N>;
-    #[inline(always)]
-    fn add(self, rhs: Tensor<D2, S, Sym, K, N>) -> Self::Output {
-        Tensor::from_flat_fn(|i| self.flat(i) + rhs.flat(i))
-    }
+macro_rules! add_like {
+    ($tr:ident, $f:ident, $op:tt) => {
+        impl<D1, D2, S1, S2, Sym1, Sym2, K1, K2, N> $tr<Tensor<D2, S2, Sym2, K2, N>> for Tensor<D1, S1, Sym1, K1, N>
+        where
+            S1: Slots + SameSlots<S2>,
+            S2: Slots,
+            N: Scalar,
+            D1: SameDimension<D2>,
+            Sym1: SameSymmetry<Sym2>,
+            K1: SameKind<K2>,
+        {
+            type Output = Tensor<D1, S1, Sym1, K1, N>;
+            #[inline(always)]
+            fn $f(self, rhs: Tensor<D2, S2, Sym2, K2, N>) -> Self::Output {
+                Tensor::from_flat_fn(|i| self.flat(i) $op rhs.flat(i))
+            }
+        }
+    };
 }
-
-impl<D1, D2, S: Slots, Sym, K, N: Scalar> Sub<Tensor<D2, S, Sym, K, N>> for Tensor<D1, S, Sym, K, N>
-where
-    D1: SameDimension<D2>,
-{
-    type Output = Tensor<D1, S, Sym, K, N>;
-    #[inline(always)]
-    fn sub(self, rhs: Tensor<D2, S, Sym, K, N>) -> Self::Output {
-        Tensor::from_flat_fn(|i| self.flat(i) - rhs.flat(i))
-    }
-}
+add_like!(Add, add, +);
+add_like!(Sub, sub, -);
 
 impl<D, S: Slots, Sym, K, N: Scalar> Neg for Tensor<D, S, Sym, K, N> {
     type Output = Self;
@@ -271,5 +280,235 @@ impl<D, N: Scalar + PartialOrd> PartialOrd for Quantity<D, N> {
 impl<D, S: Slots, Sym, K, N: Scalar> PartialEq for Tensor<D, S, Sym, K, N> {
     fn eq(&self, other: &Self) -> bool {
         (0..S::LEN).all(|i| self.flat(i) == other.flat(i))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Components with units (API-21, API-23)
+
+impl<D, S: Slots, Sym, K> Tensor<D, S, Sym, K, f64> {
+    /// Creates a tensor from its components in `unit`, as nested arrays in index
+    /// order (API-21). For symmetric tensors use `from_independent`.
+    ///
+    /// ```
+    /// use tensorcheck::Vector;
+    /// use tensorcheck::spaces::euclid3::Cartesian;
+    /// use tensorcheck::units::si::{m, s, Velocity};
+    /// let v: Vector<Velocity, Cartesian> = Vector::from_components([1.0, 2.0, 3.0], m / s);
+    /// assert_eq!(v.components_in(m / s), [1.0, 2.0, 3.0]);
+    /// ```
+    pub fn from_components<U: Unit + UnitMatches<D>>(c: S::Store<f64>, _unit: U) -> Self
+    where
+        Sym: NonSymmetric,
+    {
+        let t = Self::from_store(c);
+        t.map(to_base::<U>)
+    }
+
+    /// The components in `unit`, as nested arrays (API-23).
+    pub fn components_in<U: Unit + UnitMatches<D>>(self, _unit: U) -> S::Store<f64> {
+        self.map(from_base::<U>).c
+    }
+}
+
+/// Symmetry markers that place no constraint on components.
+pub trait NonSymmetric {}
+impl NonSymmetric for NoSym {}
+
+// ---------------------------------------------------------------------------
+// Outer product (API-26)
+
+impl<D, S: Slots, Sym, K, N: Scalar> Tensor<D, S, Sym, K, N> {
+    /// The outer product `A ⊗ B`; the slots of `B` follow those of `A` (API-26).
+    pub fn outer<D2, S2: Slots, Sym2, K2>(
+        self,
+        other: Tensor<D2, S2, Sym2, K2, N>,
+    ) -> Tensor<Prod<D, D2>, <S as Concat<S2>>::Out, NoSym, <K as KindMul<K2>>::Out, N>
+    where
+        D: DimMul<D2>,
+        S: Concat<S2>,
+        <S as Concat<S2>>::Out: Slots,
+        K: KindMul<K2>,
+    {
+        Tensor::from_flat_fn(|i| self.flat(i / S2::LEN) * other.flat(i % S2::LEN))
+    }
+
+    /// Attaches labels to the indices for Einstein-convention expressions (API-27).
+    ///
+    /// ```
+    /// use tensorcheck::labels::{a, b};
+    /// use tensorcheck::spaces::euclid3::Cartesian;
+    /// use tensorcheck::units::si::{m, one};
+    /// use tensorcheck::{Tensor, Up, Down, Vector};
+    /// use tensorcheck::utility::typelevel::{Cons, Nil};
+    /// use tensorcheck::units::si::{Dimensionless, Length};
+    /// let t: Tensor<Dimensionless, Cons<Up<Cartesian>, Cons<Down<Cartesian>, Nil>>> =
+    ///     Tensor::from_components([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 3.0]], one);
+    /// let v: Vector<Length, Cartesian> = Vector::from_components([1.0, 1.0, 1.0], m);
+    /// let w = (t.idx((a, b)) * v.idx(b)).into_tensor();
+    /// assert_eq!(w.components_in(m), [1.0, 2.0, 3.0]);
+    /// ```
+    pub fn idx<L: IntoLabels>(self, _labels: L) -> Labeled<Self, <S as ZipLabels<L::List>>::Out>
+    where
+        S: ZipLabels<L::List>,
+        <S as ZipLabels<L::List>>::Equal: LabelCount<L::List>,
+    {
+        Labeled {
+            t: self,
+            _l: PhantomData,
+        }
+    }
+}
+
+/// A tensor with labels on its indices (API-27). Multiply labeled tensors to
+/// contract repeated labels; call [`Labeled::into_tensor`] to get the result.
+///
+/// `U` lists the labels already contracted inside this expression; using one of
+/// them again is an error (ERR-06).
+pub struct Labeled<T, L, U = Nil> {
+    t: T,
+    _l: PhantomData<(L, U)>,
+}
+
+impl<D, S: Slots, Sym, K, N: Scalar, L, U> Labeled<Tensor<D, S, Sym, K, N>, L, U> {
+    /// Contracts repeated labels within this expression and returns the tensor. The
+    /// remaining indices keep their order of appearance (API-29, API-30).
+    ///
+    /// The result has no symmetry marker (2b §CMP-E04).
+    pub fn into_tensor(self) -> Tensor<D, <<L as Contract>::Out as StripLabels>::Slots, NoSym, K, N>
+    where
+        L: Contract + LabelIds,
+        <L as Contract>::Out: StripLabels,
+    {
+        let one = N::one();
+        Tensor::from_store(contract::<
+            S,
+            Nil,
+            <<L as Contract>::Out as StripLabels>::Slots,
+            L,
+            Nil,
+            N,
+        >(&self.t.c, &one))
+    }
+}
+
+impl<D1, S1, Sym1, K1, N, LA, UA, D2, S2, Sym2, K2, LB, UB>
+    Mul<Labeled<Tensor<D2, S2, Sym2, K2, N>, LB, UB>>
+    for Labeled<Tensor<D1, S1, Sym1, K1, N>, LA, UA>
+where
+    S1: Slots,
+    S2: Slots,
+    N: Scalar,
+    D1: DimMul<D2>,
+    K1: KindMul<K2>,
+    LA: Concat<LB> + LabelIds,
+    LB: LabelIds,
+    <LA as Concat<LB>>::Out: Contract + AllAbsent<<UA as Concat<UB>>::Out>,
+    Contracted<LA, LB>: StripLabels,
+    UA: Concat<UB>,
+    <UA as Concat<UB>>::Out: Concat<<<LA as Concat<LB>>::Out as Contract>::Dummies>,
+{
+    type Output = Labeled<
+        Tensor<
+            Prod<D1, D2>,
+            <Contracted<LA, LB> as StripLabels>::Slots,
+            NoSym,
+            <K1 as KindMul<K2>>::Out,
+            N,
+        >,
+        Contracted<LA, LB>,
+        <<UA as Concat<UB>>::Out as Concat<<<LA as Concat<LB>>::Out as Contract>::Dummies>>::Out,
+    >;
+    #[inline(always)]
+    fn mul(self, rhs: Labeled<Tensor<D2, S2, Sym2, K2, N>, LB, UB>) -> Self::Output {
+        let c = contract::<S1, S2, <Contracted<LA, LB> as StripLabels>::Slots, LA, LB, N>(
+            &self.t.c, &rhs.t.c,
+        );
+        Labeled {
+            t: Tensor::from_store(c),
+            _l: PhantomData,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// One component with its own dimension (API-24)
+
+/// The dimension of the component selected by coordinates `X` (DD-04).
+pub trait ComponentDim<D, X, I> {
+    /// `[T] ∏ [x^up] / ∏ [x^down]`.
+    type Out;
+    /// The flat index of the component.
+    fn flat_index() -> usize;
+}
+impl<D> ComponentDim<D, Nil, Nil> for Nil {
+    type Out = D;
+    fn flat_index() -> usize {
+        0
+    }
+}
+impl<D, Sl, S, X, Xs, I, Is> ComponentDim<D, Cons<X, Xs>, Cons<I, Is>> for Cons<Sl, S>
+where
+    Sl: Slot + SlotExtent,
+    S: Slots + ComponentDim<D, Xs, Is>,
+    <Sl::Chart as Chart>::Coords: CoordOf<X, Sl::Chart, I>,
+    <Sl::Chart as Chart>::CoordDims: At<I>,
+    Sl: VarianceDim<
+            <S as ComponentDim<D, Xs, Is>>::Out,
+            <<Sl::Chart as Chart>::CoordDims as At<I>>::Out,
+        >,
+{
+    type Out = <Sl as VarianceDim<
+        <S as ComponentDim<D, Xs, Is>>::Out,
+        <<Sl::Chart as Chart>::CoordDims as At<I>>::Out,
+    >>::Out;
+    fn flat_index() -> usize {
+        <<Sl::Chart as Chart>::Coords as CoordOf<X, Sl::Chart, I>>::POS * S::LEN + S::flat_index()
+    }
+}
+
+/// Multiplies (upper) or divides (lower) by a coordinate's dimension.
+pub trait VarianceDim<D, Dx> {
+    /// The resulting dimension.
+    type Out;
+}
+impl<C, D: DimMul<Dx>, Dx> VarianceDim<D, Dx> for Up<C> {
+    type Out = Prod<D, Dx>;
+}
+impl<C, D: DimDiv<Dx>, Dx> VarianceDim<D, Dx> for Down<C> {
+    type Out = Quot<D, Dx>;
+}
+
+/// Coordinates passed to `at`: a tuple of coordinate markers.
+pub trait IntoCoords {
+    /// The coordinates as a type-level list.
+    type List;
+}
+macro_rules! into_coords_tuple {
+    ($($x:ident),+) => {
+        impl<$($x),+> IntoCoords for ($($x,)+) {
+            type List = into_coords_tuple!(@list $($x),+);
+        }
+    };
+    (@list $h:ident $(, $t:ident)*) => { Cons<$h, into_coords_tuple!(@list $($t),*)> };
+    (@list) => { Nil };
+}
+into_coords_tuple!(X1);
+into_coords_tuple!(X1, X2);
+into_coords_tuple!(X1, X2, X3);
+into_coords_tuple!(X1, X2, X3, X4);
+
+impl<D, S: Slots, Sym, K, N: Scalar> Tensor<D, S, Sym, K, N> {
+    /// The component selected by coordinate markers, with its own dimension
+    /// (API-24). For example `v.at((Theta,))` in polar coordinates has dimension
+    /// `[v]·[θ]`.
+    pub fn at<X: IntoCoords, I>(
+        self,
+        _coords: X,
+    ) -> Quantity<<S as ComponentDim<D, X::List, I>>::Out, N>
+    where
+        S: ComponentDim<D, X::List, I>,
+    {
+        Tensor::from_store(self.flat(<S as ComponentDim<D, X::List, I>>::flat_index()))
     }
 }

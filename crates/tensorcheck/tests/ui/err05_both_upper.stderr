@@ -1,0 +1,17 @@
+error[E0277]: cannot contract index `a`: it is upper in both places
+ --> tests/ui/err05_both_upper.rs:9:23
+  |
+9 |     let _ = (v.idx(a) * v.idx(a)).into_tensor();
+  |                       ^ repeated index with the same position
+  |
+  = note: a repeated index must be upper in one place and lower in the other; raise or lower one with a metric first
+help: the trait `Opposite<upper, a>` is not implemented for `upper`
+      but trait `Opposite<lower, a>` is implemented for it
+ --> src/engine/index.rs
+  |
+  | impl<L> Opposite<lower, L> for upper {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = help: for that trait implementation, expected `lower`, found `upper`
+  = note: required for `Cons<Ix<a, Up<Cartesian>>, Nil>` to implement `FindBranch<True, a, Up<Cartesian>>`
+  = note: required for `Cons<Ix<a, Up<Cartesian>>, Cons<Ix<a, Up<Cartesian>>, Nil>>` to implement `Contract`
+  = note: required for `Labeled<Tensor<Dim<Si, Cons<Pos<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Nil>>>>>>>>, Cons<Up<Cartesian>, Nil>>, Cons<Ix<a, Up<Cartesian>>, Nil>>` to implement `Mul`
