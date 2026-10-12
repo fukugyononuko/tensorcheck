@@ -25,7 +25,7 @@
 
 | ID | 場所 | 内容 | 構成要素 |
 | --- | --- | --- | --- |
-| API-01 | `tensorcheck::Tensor` | テンソルの型 `Tensor<D, S, Sym = NoSym>`。`D` は次元、`S` は枠の並び、`Sym` は対称性 | M01 |
+| API-01 | `tensorcheck::Tensor` | テンソルの型 `Tensor<D, S, Sym = NoSym, K = Tensorial, N = f64>`。`D` は次元、`S` は枠の並び、`Sym` は対称性、`K` はテンソル性（`Tensorial` か `ChartBound`）、`N` は数値の型 | M01 |
 | API-02 | `tensorcheck::{Quantity, Vector, Covector}` | よく使う形の別名。`Quantity<D>` は階数 0、`Vector<D, C>` は `Up<C>` が 1 つ、`Covector<D, C>` は `Down<C>` が 1 つ | M01 |
 | API-03 | `tensorcheck::{Up, Down}` | 枠の型。`Up<C>` は座標系 `C` の上付き、`Down<C>` は下付き。空間は `C` から決まる | E02 |
 | API-04 | `tensorcheck::{NoSym, Symmetric, Antisymmetric}` | 対称性の型 | E04 |
@@ -34,9 +34,11 @@
 | API-07 | `tensorcheck::dim::{Prod, Quot, Pow}` | 次元から次元を作る型（例：`Quot<Length, Time>` は速度） | E01 |
 | API-08 | `tensorcheck::labels` | 用意したラベル：`a`〜`h`、`i`〜`n`、`mu`、`nu`、`rho`、`sigma`、`alpha`、`beta`、`I`〜`N`。利用者がラベルを足すマクロ `label!` | E02 |
 | API-09 | `tensorcheck::slot::{_0, _1, _2, _3}` | 上げ下げで、どの枠かを指定する印 | E02 |
-| API-10 | `tensorcheck::Point<C>` | 座標系 `C` の点。座標ごとに次元つきの値を持つ | E02 |
-| API-11 | `tensorcheck::spaces` | 用意した空間・座標系・計量・座標変換：3 次元 Euclid 空間（デカルト、極（2 次元）、円柱、球）、Minkowski 時空（デカルト）、それぞれの計量と、デカルト座標との座標変換 | E02, E03 |
-| API-12 | `tensorcheck::VectorSpace` | 数値解法の状態の契約（U05）。テンソルと、テンソルの組（要素が 2〜6 個）が実装する | U05 |
+| API-10 | `tensorcheck::Point<C, N = f64>` | 座標系 `C` の点。座標ごとに次元つきの値を持つ | E02 |
+| API-11 | `tensorcheck::spaces` | 用意した空間・座標系・計量テンソル・座標変換：3 次元 Euclid 空間（デカルト、極（2 次元）、円柱、球）、Minkowski 時空（デカルト）、半径を指定する 2 次元球面、それぞれの計量テンソルと、デカルト座標との座標変換 | E02, E03 |
+| API-12 | `tensorcheck::VectorSpace` | 数値解法の状態の契約（U05）。テンソル、点、それらの組（要素が 2〜6 個）が実装する | U05 |
+| API-16 | `tensorcheck::geometry` | 接続・曲率・共変微分（API-50〜API-55） | M03 |
+| API-17 | `tensorcheck::autodiff::{Dual, HyperDual}` | 自動微分の数値の型（U02）。利用者が直接使うことは少なく、計量テンソルやテンソル場を数値の型によらない形で書けば、ライブラリが使う | U02 |
 | API-13 | `tensorcheck_numerics::ode` | 常微分方程式：`solve_ivp`、`solve_second_order`、解法の型、許容値、解、失敗 | M02 |
 | API-14 | `tensorcheck_numerics::quad` | 定積分：`integrate`、解法の型、結果、失敗 | M02 |
 | API-15 | `tensorcheck_numerics::diff` | 数値微分：`derivative`、`jacobian`、方式の型 | M02 |
@@ -57,9 +59,20 @@
 | API-28 | `g.idx((a, b)) * v.idx(b)` | ラベルつきの式の積。同じラベルが上下に 1 組あれば縮約する（Einstein の規約） | `contract` |
 | API-29 | `t.idx((a, a))` | 1 つのテンソルの中の縮約（トレース） | `trace` |
 | API-30 | `expr.into_tensor()` | ラベルつきの式をテンソルに戻す。残った枠は、式の中で現れた順に並ぶ | — |
-| API-31 | `t.raise(slot::_0, &metric, &point)`、`t.lower(...)` | 計量で添字を上げ下げする | `raise` / `lower` |
+| API-31 | `t.raise(slot::_0, &metric, &point)`、`t.lower(...)` | 計量テンソルで添字を上げ下げする | `raise` / `lower` |
 | API-32 | `t.transform(&transform, &point)` | 座標系を変換する | `transform` |
 | API-33 | `t.symmetrize()`、`t.antisymmetrize()` | 対称化・反対称化 | `symmetrize` / `antisymmetrize` |
+
+### 幾何（M03）
+
+| ID | 書き方 | 意味 | 対応する操作（2b） |
+| --- | --- | --- | --- |
+| API-50 | `Christoffel<C, N>` | Christoffel 記号の型。`Tensor<Dimensionless, (Up<C>, Down<C>, Down<C>), NoSym, ChartBound, N>` の別名 | — |
+| API-51 | `geometry::christoffel(&metric, &p)` | 点 `p` での $\Gamma^a{}_{bc}$ | `christoffel` |
+| API-52 | `geometry::{riemann, ricci, ricci_scalar, einstein}(&metric, &p)` | 点 `p` での $R^a{}_{bcd}$、$R_{ab}$、$R$、$G_{ab}$ | `riemann` ほか |
+| API-53 | `geometry::curvature(&metric, &p)` | 同じ点の $g$、$\partial g$、$\partial\partial g$ を 1 回だけ求め、$\Gamma$ と曲率をまとめて返す | `riemann` ほか |
+| API-54 | `geometry::covariant_derivative(&field, &metric, &p)` | 点 `p` での $\nabla_c T^{a\cdots}{}_{b\cdots}$。結果は下付きの枠が 1 つ増えたテンソル | `covariant_derivative` |
+| API-55 | `field.at(&p)` | テンソル場を点で評価する（`f64` で） | — |
 
 ### 数値計算（M02）
 
@@ -137,6 +150,41 @@ let work = integrate(|x| force_at(x), x0..x1, GaussKronrod, Tolerance { rtol: 1e
 // work.value has the dimension of energy
 ```
 
+UC-09（球面の曲率と測地線）：
+
+```rust
+use tensorcheck::geometry::{christoffel, ricci_scalar};
+use tensorcheck::labels::{a, b, c};
+use tensorcheck::spaces::sphere2::{Sphere2, SphereMetric};
+
+let g = SphereMetric::new(1.0 * m);                       // g = a^2 (dθ^2 + sin^2θ dφ^2)
+let p = Point::<Sphere2>::new((0.7 * rad, 0.0 * rad));
+let r = ricci_scalar(&g, &p);                             // 2 / a^2, dimension 1/m^2
+let gamma = christoffel(&g, &p);                          // Christoffel<Sphere2>: not a tensor
+// gamma.transform(&ToCartesian, &p);                     // compile error: not a tensor (ERR-16)
+
+// geodesic: dx/dλ = u, du/dλ = -Γ^a_bc u^b u^c
+let rhs = |_l, (x, u): &(Point<Sphere2>, Vector<_, Sphere2>)| {
+    let gamma = christoffel(&g, x);
+    (u.clone(), -(gamma.idx((a, b, c)) * u.idx(b) * u.idx(c)).into_tensor())
+};
+```
+
+UC-09 の計量テンソルの定義（利用者が書く場合）：
+
+```rust
+impl Metric for SphereMetric {
+    type Chart = Sphere2;
+    type Dim = Area;
+    // generic over the scalar type N, so the library can evaluate it with dual numbers
+    fn components<N: Scalar>(&self, p: &Point<Sphere2, N>) -> [[N; 2]; 2] {
+        let a2 = N::from(self.radius_squared());
+        let s = p.coord::<Theta>().sin();
+        [[a2, N::zero()], [N::zero(), a2 * s * s]]
+    }
+}
+```
+
 ### 縮約の書き方（OPEN-03 の結論）
 
 メソッド（`idx`）と演算子（`*`）で書く。マクロは初期には用意しない。
@@ -156,7 +204,8 @@ let work = integrate(|x| force_at(x), x0..x1, GaussKronrod, Tolerance { rtol: 1e
 | EXT-03 | `Space` | 次元数 $n$（型レベルの整数）、名前 | E02 | VOL-03 |
 | EXT-04 | `Chart` | 属する空間、座標の型の並び、各座標の次元、名前 | E02 | VOL-04 |
 | EXT-05 | `ChartTransform` | 変換元と変換先の座標系、点の写し方、Jacobi 行列 $\partial x'^a / \partial x^b$。逆は省略できる（省略すると U04 で求める） | E02 | VOL-04 |
-| EXT-06 | `Metric` | 座標系、全体の次元、点での成分 $g_{ab}(x)$。逆は省略できる | E03 | VOL-05 |
+| EXT-06 | `Metric` | 座標系、全体の次元、点での成分 $g_{ab}(x)$ を数値の型 `N` によらない形で。逆は省略できる | E03 | VOL-05 |
+| EXT-08 | `TensorField` | 座標系、返すテンソルの型、点での成分を数値の型 `N` によらない形で | M03 | — |
 | EXT-07 | 関数（`Fn(T, &Y) -> Y::Per<T>` など） | 右辺、加速度、被積分関数、微分する関数、Jacobi 行列 | M02 | — |
 
 単位系・空間・座標系の定義は、構造体の定義と trait の実装を毎回書くと長くなるので、それを生成するマクロ（`unit_system!`、`space!`、`chart!`）も用意する。マクロが生成するのは EXT の実装だけで、ライブラリの内部には触れない。
@@ -175,16 +224,20 @@ let work = integrate(|x| force_at(x), x0..x1, GaussKronrod, Tolerance { rtol: 1e
 | ERR-06 | 同じラベルが 3 回以上 | `` index `{L}` appears more than twice `` | `use a different label for each pair of contracted indices` | E02 |
 | ERR-07 | 縮約するラベルの空間が違う | `` index `{L}` belongs to different spaces `` | `contracted indices must belong to the same space (e.g. both spacetime, or both field space)` | E02 |
 | ERR-08 | 縮約するラベルの座標系が違う | `` index `{L}` is in chart `{C1}` in one place and `{C2}` in the other `` | `transform one tensor to the other chart first` | E02 |
-| ERR-09 | 計量の座標系と枠の座標系が違う | `` metric `{G}` is defined on chart `{C1}`, but the index is in chart `{C2}` `` | — | E02 |
+| ERR-09 | 計量テンソルの座標系と枠の座標系が違う | `` metric `{G}` is defined on chart `{C1}`, but the index is in chart `{C2}` `` | — | E02 |
 | ERR-10 | 座標変換の変換元と、テンソルの座標系が違う | `` transform `{X}` starts from chart `{C1}`, but the tensor is in chart `{C2}` `` | — | E02 |
 | ERR-11 | 指定した座標が、その枠の座標系のものでない | `` coordinate `{K}` does not belong to chart `{C}` `` | — | E02 |
 | ERR-12 | 枠が同じでないテンソルを対称・反対称にする | `only tensors whose indices are all of the same kind can be symmetric or antisymmetric` | `all indices must be in the same space and chart, and all upper or all lower` | E04 |
 | ERR-13 | 対称性の違うテンソルの足し算 | `cannot add tensors with different symmetry` | `symmetrize or antisymmetrize one of them first` | E04 |
 | ERR-14 | 右辺の型が「状態 ÷ 時間」でない | `the right-hand side must return the state type divided by the time dimension` | `for dy/dt = f(t, y), f must return a value whose dimension is [y]/[t]` | M02 |
 | ERR-15 | 許容値の絶対誤差の型が状態と違う | `the absolute tolerance must have the same type as the state` | — | M02 |
+| ERR-16 | テンソルでないもの（Christoffel 記号など）の座標変換 | `` `{T}` is not a tensor and cannot be transformed to another chart `` | `Christoffel symbols and partial derivatives depend on the chart; compute them in the target chart instead` | E02 |
+| ERR-17 | テンソルとテンソルでないものの足し算 | `cannot add a tensor and a chart-bound (non-tensor) quantity` | `use geometry::covariant_derivative to combine partial derivatives and Christoffel symbols` | E02 |
+| ERR-18 | 計量テンソル・テンソル場の成分が、数値の型によらない形で書かれていない | （差し替えられない。コンパイラ自身のエラー E0049「型引数の数が trait の宣言と合わない」が出る） | API ドキュメントと EXT-06・EXT-08 の説明に、数値の型によらない形で書く理由と書き方を載せる | コンパイラ |
 
 - 見出しの文言は実装時に、04 のコンパイル失敗のテスト（TC-F）で実際の出力を確かめて調整する。調整したらこの表も直す。
 - 判定する構成要素が M02 の誤り（ERR-14、ERR-15）は、M02 の公開する関数の型の制約として表す。
+- ERR-18 は、trait のメソッドの形の誤りなので、コンパイラ自身のエラーになり、見出しを差し替えられない。NFR-05 の例外として扱い、ドキュメントで補う。
 
 ## 2a.5 外部から利用するもの（USE）
 
