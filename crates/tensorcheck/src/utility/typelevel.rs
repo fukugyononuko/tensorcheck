@@ -1,0 +1,393 @@
+//! Type-level naturals, integers, booleans and lists (CMP-U01, DD-02).
+//!
+//! Everything here is computed by the trait solver at compile time. The types are
+//! zero-sized markers and never exist at run time.
+
+use core::marker::PhantomData;
+
+// ---------------------------------------------------------------------------
+// Booleans
+
+/// Type-level `true`.
+pub struct True;
+/// Type-level `false`.
+pub struct False;
+
+/// A type-level boolean.
+pub trait Bool {
+    /// The value as a `bool`.
+    const VALUE: bool;
+}
+impl Bool for True {
+    const VALUE: bool = true;
+}
+impl Bool for False {
+    const VALUE: bool = false;
+}
+
+// ---------------------------------------------------------------------------
+// Naturals (Peano numbers)
+
+/// Type-level zero.
+pub struct Z;
+/// Type-level successor of `N`.
+pub struct S<N>(PhantomData<N>);
+
+/// A type-level natural number.
+pub trait Nat: 'static {
+    /// The value as a `usize`.
+    const VALUE: usize;
+}
+impl Nat for Z {
+    const VALUE: usize = 0;
+}
+impl<N: Nat> Nat for S<N> {
+    const VALUE: usize = N::VALUE + 1;
+}
+
+/// Equality of naturals: `Out` is [`True`] or [`False`].
+pub trait NatEq<B> {
+    /// The result.
+    type Out: Bool;
+}
+impl NatEq<Z> for Z {
+    type Out = True;
+}
+impl<N> NatEq<S<N>> for Z {
+    type Out = False;
+}
+impl<N> NatEq<Z> for S<N> {
+    type Out = False;
+}
+impl<N: NatEq<M>, M> NatEq<S<M>> for S<N> {
+    type Out = <N as NatEq<M>>::Out;
+}
+
+/// Addition of naturals.
+pub trait NatAdd<B> {
+    /// The sum.
+    type Out;
+}
+impl<B> NatAdd<B> for Z {
+    type Out = B;
+}
+impl<N: NatAdd<B>, B> NatAdd<B> for S<N> {
+    type Out = S<<N as NatAdd<B>>::Out>;
+}
+
+/// `Self - B` as a signed integer.
+pub trait NatSub<B> {
+    /// The difference.
+    type Out;
+}
+impl NatSub<Z> for Z {
+    type Out = Zero;
+}
+impl<N> NatSub<Z> for S<N> {
+    type Out = Pos<S<N>>;
+}
+impl<N> NatSub<S<N>> for Z {
+    type Out = Neg<S<N>>;
+}
+impl<N: NatSub<M>, M> NatSub<S<M>> for S<N> {
+    type Out = <N as NatSub<M>>::Out;
+}
+
+// ---------------------------------------------------------------------------
+// Integers. Zero has exactly one representation, so equal integers are equal types.
+
+/// Type-level integer zero.
+pub struct Zero;
+/// Type-level positive integer `N` (`N >= 1`).
+pub struct Pos<N>(PhantomData<N>);
+/// Type-level negative integer `-N` (`N >= 1`).
+pub struct Neg<N>(PhantomData<N>);
+
+/// A type-level integer.
+pub trait Int: 'static {
+    /// The value as an `i32`.
+    const VALUE: i32;
+}
+impl Int for Zero {
+    const VALUE: i32 = 0;
+}
+impl<N: Nat> Int for Pos<S<N>> {
+    const VALUE: i32 = <S<N> as Nat>::VALUE as i32;
+}
+impl<N: Nat> Int for Neg<S<N>> {
+    const VALUE: i32 = -(<S<N> as Nat>::VALUE as i32);
+}
+
+/// Integer addition.
+pub trait IntAdd<B> {
+    /// The sum.
+    type Out;
+}
+impl<B> IntAdd<B> for Zero {
+    type Out = B;
+}
+impl<A> IntAdd<Zero> for Pos<A> {
+    type Out = Pos<A>;
+}
+impl<A> IntAdd<Zero> for Neg<A> {
+    type Out = Neg<A>;
+}
+impl<A: NatAdd<B>, B> IntAdd<Pos<B>> for Pos<A> {
+    type Out = Pos<<A as NatAdd<B>>::Out>;
+}
+impl<A: NatAdd<B>, B> IntAdd<Neg<B>> for Neg<A> {
+    type Out = Neg<<A as NatAdd<B>>::Out>;
+}
+impl<A: NatSub<B>, B> IntAdd<Neg<B>> for Pos<A> {
+    type Out = <A as NatSub<B>>::Out;
+}
+impl<A, B: NatSub<A>> IntAdd<Pos<B>> for Neg<A> {
+    type Out = <B as NatSub<A>>::Out;
+}
+
+/// Integer equality: `Out` is [`True`] or [`False`].
+pub trait IntEq<B> {
+    /// The result.
+    type Out: Bool;
+}
+impl IntEq<Zero> for Zero {
+    type Out = True;
+}
+impl<B> IntEq<Pos<B>> for Zero {
+    type Out = False;
+}
+impl<B> IntEq<Neg<B>> for Zero {
+    type Out = False;
+}
+impl<A> IntEq<Zero> for Pos<A> {
+    type Out = False;
+}
+impl<A> IntEq<Zero> for Neg<A> {
+    type Out = False;
+}
+impl<A, B> IntEq<Neg<B>> for Pos<A> {
+    type Out = False;
+}
+impl<A, B> IntEq<Pos<B>> for Neg<A> {
+    type Out = False;
+}
+impl<A: NatEq<B>, B> IntEq<Pos<B>> for Pos<A> {
+    type Out = <A as NatEq<B>>::Out;
+}
+impl<A: NatEq<B>, B> IntEq<Neg<B>> for Neg<A> {
+    type Out = <A as NatEq<B>>::Out;
+}
+
+/// Logical and.
+pub trait And<B> {
+    /// The result.
+    type Out: Bool;
+}
+impl<B: Bool> And<B> for True {
+    type Out = B;
+}
+impl<B> And<B> for False {
+    type Out = False;
+}
+
+/// Element-wise equality of two lists of integers of equal length.
+pub trait IntListEq<B> {
+    /// The result.
+    type Out: Bool;
+}
+impl IntListEq<Nil> for Nil {
+    type Out = True;
+}
+impl<A, B, TA, TB> IntListEq<Cons<B, TB>> for Cons<A, TA>
+where
+    A: IntEq<B>,
+    TA: IntListEq<TB>,
+    <A as IntEq<B>>::Out: And<<TA as IntListEq<TB>>::Out>,
+{
+    type Out = <<A as IntEq<B>>::Out as And<<TA as IntListEq<TB>>::Out>>::Out;
+}
+
+/// Integer negation.
+pub trait IntNeg {
+    /// `-Self`.
+    type Out;
+}
+impl IntNeg for Zero {
+    type Out = Zero;
+}
+impl<A> IntNeg for Pos<A> {
+    type Out = Neg<A>;
+}
+impl<A> IntNeg for Neg<A> {
+    type Out = Pos<A>;
+}
+
+/// Integer subtraction.
+pub trait IntSub<B> {
+    /// `Self - B`.
+    type Out;
+}
+impl<A, B: IntNeg> IntSub<B> for A
+where
+    A: IntAdd<<B as IntNeg>::Out>,
+{
+    type Out = <A as IntAdd<<B as IntNeg>::Out>>::Out;
+}
+
+/// Multiplication of an integer by a type-level integer `K` (used for powers of dimensions).
+pub trait IntMul<K> {
+    /// `Self * K`.
+    type Out;
+}
+impl<A> IntMul<Zero> for A {
+    type Out = Zero;
+}
+impl<A> IntMul<Pos<S<Z>>> for A {
+    type Out = A;
+}
+impl<A, N> IntMul<Pos<S<S<N>>>> for A
+where
+    A: IntMul<Pos<S<N>>>,
+    <A as IntMul<Pos<S<N>>>>::Out: IntAdd<A>,
+{
+    type Out = <<A as IntMul<Pos<S<N>>>>::Out as IntAdd<A>>::Out;
+}
+impl<A, N> IntMul<Neg<N>> for A
+where
+    A: IntMul<Pos<N>>,
+    <A as IntMul<Pos<N>>>::Out: IntNeg,
+{
+    type Out = <<A as IntMul<Pos<N>>>::Out as IntNeg>::Out;
+}
+
+/// Maps a `const` integer to its type-level integer, for `-20..=20`.
+pub struct ConstInt<const K: i32>;
+
+/// Implemented by [`ConstInt<K>`] for supported `K`.
+pub trait ToInt {
+    /// The type-level integer.
+    type Out: Int;
+}
+
+macro_rules! int_aliases {
+    ($($p:ident $n:ident $v:literal = $nat:ty;)*) => {
+        $(
+            #[doc = concat!("Type-level integer `", stringify!($v), "`.")]
+            pub type $p = Pos<$nat>;
+            #[doc = concat!("Type-level integer `-", stringify!($v), "`.")]
+            pub type $n = Neg<$nat>;
+            impl ToInt for ConstInt<$v> { type Out = $p; }
+            impl ToInt for ConstInt<{ -$v }> { type Out = $n; }
+        )*
+    };
+}
+/// Type-level integer `0`.
+pub type Z0 = Zero;
+impl ToInt for ConstInt<0> {
+    type Out = Zero;
+}
+int_aliases! {
+    P1 N1 1 = S<Z>;
+    P2 N2 2 = S<S<Z>>;
+    P3 N3 3 = S<S<S<Z>>>;
+    P4 N4 4 = S<S<S<S<Z>>>>;
+    P5 N5 5 = S<S<S<S<S<Z>>>>>;
+    P6 N6 6 = S<S<S<S<S<S<Z>>>>>>;
+    P7 N7 7 = S<S<S<S<S<S<S<Z>>>>>>>;
+    P8 N8 8 = S<S<S<S<S<S<S<S<Z>>>>>>>>;
+    P9 N9 9 = S<S<S<S<S<S<S<S<S<Z>>>>>>>>>;
+    P10 N10 10 = S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>;
+    P11 N11 11 = S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>;
+    P12 N12 12 = S<S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>>;
+    P13 N13 13 = S<S<S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>>>;
+    P14 N14 14 = S<S<S<S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>>>>;
+    P15 N15 15 = S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>>>>>;
+    P16 N16 16 = S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>>>>>>;
+    P17 N17 17 = S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>>>>>>>;
+    P18 N18 18 = S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>>>>>>>>;
+    P19 N19 19 = S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>>>>>>>>>;
+    P20 N20 20 = S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<S<Z>>>>>>>>>>>>>>>>>>>>;
+}
+
+// ---------------------------------------------------------------------------
+// Lists
+
+/// The empty type-level list.
+pub struct Nil;
+/// A type-level list with head `H` and tail `T`.
+pub struct Cons<H, T>(PhantomData<(H, T)>);
+
+/// The length of a type-level list.
+pub trait Len {
+    /// The length.
+    const LEN: usize;
+}
+impl Len for Nil {
+    const LEN: usize = 0;
+}
+impl<H, T: Len> Len for Cons<H, T> {
+    const LEN: usize = T::LEN + 1;
+}
+
+/// Concatenation of type-level lists.
+pub trait Concat<B> {
+    /// `Self ++ B`.
+    type Out;
+}
+impl<B> Concat<B> for Nil {
+    type Out = B;
+}
+impl<H, T: Concat<B>, B> Concat<B> for Cons<H, T> {
+    type Out = Cons<H, <T as Concat<B>>::Out>;
+}
+
+/// Element-wise integer addition of two lists of equal length.
+pub trait ZipAdd<B> {
+    /// The element-wise sum.
+    type Out;
+}
+impl ZipAdd<Nil> for Nil {
+    type Out = Nil;
+}
+impl<A: IntAdd<B>, B, TA: ZipAdd<TB>, TB> ZipAdd<Cons<B, TB>> for Cons<A, TA> {
+    type Out = Cons<<A as IntAdd<B>>::Out, <TA as ZipAdd<TB>>::Out>;
+}
+
+/// Element-wise integer subtraction of two lists of equal length.
+pub trait ZipSub<B> {
+    /// The element-wise difference.
+    type Out;
+}
+impl ZipSub<Nil> for Nil {
+    type Out = Nil;
+}
+impl<A: IntSub<B>, B, TA: ZipSub<TB>, TB> ZipSub<Cons<B, TB>> for Cons<A, TA> {
+    type Out = Cons<<A as IntSub<B>>::Out, <TA as ZipSub<TB>>::Out>;
+}
+
+/// Multiplies every integer in a list by `K`.
+pub trait MapMul<K> {
+    /// The scaled list.
+    type Out;
+}
+impl<K> MapMul<K> for Nil {
+    type Out = Nil;
+}
+impl<A: IntMul<K>, T: MapMul<K>, K> MapMul<K> for Cons<A, T> {
+    type Out = Cons<<A as IntMul<K>>::Out, <T as MapMul<K>>::Out>;
+}
+
+/// Reads a list of type-level integers into a slice.
+pub trait IntList {
+    /// Writes the values into `out` (which must have the list's length).
+    fn write(out: &mut [i32]);
+}
+impl IntList for Nil {
+    fn write(_: &mut [i32]) {}
+}
+impl<A: Int, T: IntList> IntList for Cons<A, T> {
+    fn write(out: &mut [i32]) {
+        out[0] = A::VALUE;
+        T::write(&mut out[1..]);
+    }
+}
