@@ -1,14 +1,27 @@
 # tensorcheck
 
-物理量の次元と、テンソルの構造（階数と形・添字の上下・座標系・対称性）を、Rust のコンパイル時に検査するライブラリです。座標（空間・時空）のテンソルにも、場空間のテンソルにも使えます。
+A Rust library that checks physical dimensions and tensor structure (rank and shape, upper/lower indices, coordinate systems, and symmetry) at compile time. It works for tensors on coordinate spaces (space, spacetime) and on field spaces alike, and provides numerical solvers (ODEs, quadrature, numerical differentiation) that keep those checks intact.
 
-**開発中です。** まだ使える API はありません。
+**Work in progress.** There is no usable API yet. Design documents (in Japanese) are in [docs/](docs/).
 
-- 制作：[副業のぬこ](https://fukugyononuko.github.io/)
+- Author: [fukugyononuko](https://fukugyononuko.github.io/)
 
-## 開発
+## How it differs from existing crates
 
-Rust（`rust-toolchain.toml` で版を固定）と Python 3（検査スクリプト）を使います。
+As of 2026-10-12 (details: [docs/01_overview.md](docs/01_overview.md) §1.1, in Japanese):
+
+| Area | Crates | Difference |
+| --- | --- | --- |
+| Dimensions | uom, dimensioned, diman | Scalar dimensions only; no tensor structure. diman requires unstable Rust |
+| Tensors | differential-geometry | Closest match (dimension $n$ and coordinate systems as types), but no physical units, symmetry, or Einstein-convention contraction; not updated since 2019 |
+| ODEs | diffsol, russell_ode, ode_solvers | State is a plain array of numbers, so dimension checks stop at the solver boundary |
+| Quadrature | bilby, integrate, quad-rs | Integrands return plain numbers |
+
+We found no crate that combines dimensions and tensor structure in one type, and no numerical solver that keeps dimensions through the computation.
+
+## Development
+
+Requires Rust (version pinned in `rust-toolchain.toml`) and Python 3 (for the check scripts).
 
 ```sh
 cargo fmt --check
@@ -19,6 +32,6 @@ python3 scripts/check_workflows.py
 python3 scripts/check_privacy.py
 ```
 
-## ライセンス
+## License
 
-MIT または Apache-2.0 のどちらかを選べます（[LICENSE-MIT](LICENSE-MIT)、[LICENSE-APACHE](LICENSE-APACHE)）。
+Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

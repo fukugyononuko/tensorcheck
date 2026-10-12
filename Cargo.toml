@@ -3,7 +3,7 @@ name = "tensorcheck"
 version = "0.0.0"
 edition = "2024"
 rust-version = "1.99"
-description = "物理量の次元とテンソルの構造（階数と形・添字の上下・座標系・対称性）をコンパイル時に検査する"
+description = "Compile-time checks for physical dimensions and tensor structure (rank, index variance, coordinate systems, symmetry)"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/fukugyononuko/tensorcheck"
 # 初期版は GitHub だけで公開する（crates.io には出さない）

@@ -57,3 +57,71 @@ flowchart LR
 | FR-22 誤差の許容値と失敗の知らせ | UC-07, UC-08 | 初期 |
 | FR-23 陰的解法（Radau IIA・BDF） | — | 将来 |
 | FR-24 無限区間・多次元の積分 | — | 将来 |
+
+## T.3 変動性 → 構成要素
+
+| VOL | 構成要素 |
+| --- | --- |
+| VOL-01 単位系 | CMP-E01 DimensionEngine |
+| VOL-02 単位 | CMP-E01 DimensionEngine |
+| VOL-03 空間 | CMP-E02 IndexEngine |
+| VOL-04 座標系 | CMP-E02 IndexEngine |
+| VOL-05 計量 | CMP-E03 MetricEngine |
+| VOL-06 対称性 | CMP-E04 SymmetryEngine |
+| VOL-07 常微分方程式の解法 | CMP-E05 OdeStepEngine |
+| VOL-08 誤差の測り方と刻みの調整 | CMP-E06 ErrorControlEngine |
+| VOL-09 定積分の解法 | CMP-E07 QuadratureEngine |
+| VOL-10 数値微分の方式 | CMP-E08 DifferentiationEngine |
+| VOL-11 成分の持ち方 | CMP-A01 ComponentAccess |
+| VOL-12 数値の型 | CMP-U02 Scalar |
+| VOL-13 ユースケースの手順 | CMP-M01 TensorManager、CMP-M02 SolverManager |
+
+## T.4 要件 → 構成要素
+
+| 要件 | 構成要素 |
+| --- | --- |
+| FR-01 次元つきの量 | CMP-M01, CMP-E01 |
+| FR-02 単位系の定義 | CMP-E01 |
+| FR-03 単位を指定した入出力 | CMP-M01, CMP-E01 |
+| FR-04 空間の定義 | CMP-E02 |
+| FR-05 座標系の定義 | CMP-E02 |
+| FR-06 任意の階数のテンソル | CMP-M01, CMP-E01, CMP-E02, CMP-A01 |
+| FR-07 縮約 | CMP-M01, CMP-E02, CMP-A01 |
+| FR-08 足し算・外積・トレース | CMP-M01, CMP-E01, CMP-E02, CMP-E04, CMP-A01 |
+| FR-09 計量と上げ下げ | CMP-M01, CMP-E02, CMP-E03 |
+| FR-10 対称性 | CMP-M01, CMP-E04 |
+| FR-11 座標系の変換 | CMP-M01, CMP-E02 |
+| FR-12 成分の取り出し | CMP-M01, CMP-E01, CMP-E02, CMP-A01 |
+| FR-13 エラー文 | CMP-U03 |
+| FR-14 例題 | CMP-C02 |
+| FR-15 共変微分（将来） | CMP-M01, CMP-E03（接続を計量から求める） |
+| FR-16 ほかの数値型（将来） | CMP-U02 |
+| FR-17 圧縮した持ち方（将来） | CMP-A01 |
+| FR-18 常微分方程式 | CMP-M02, CMP-E05, CMP-E06, CMP-U05 |
+| FR-19 硬い常微分方程式 | CMP-M02, CMP-E05, CMP-E06, CMP-E08, CMP-U04 |
+| FR-20 定積分 | CMP-M02, CMP-E06, CMP-E07, CMP-U05 |
+| FR-21 数値微分 | CMP-M02, CMP-E08 |
+| FR-22 誤差の許容値と失敗の知らせ | CMP-M02, CMP-E06 |
+| FR-23 陰的解法（将来） | CMP-E05, CMP-U04 |
+| FR-24 無限区間・多次元の積分（将来） | CMP-E07 |
+| NFR-01 stable・`no_std`・依存なし | すべて（01 §1.8） |
+| NFR-03 型の情報は実行時の大きさを持たない | CMP-U01, CMP-A01 |
+| NFR-05 エラー文は見出しでわかる | CMP-U03 |
+| NFR-07 英語 | CMP-U03、CMP-C02 |
+| NFR-10 変化は 1 つの構成要素で | §T.3 |
+| NFR-11 呼び出しの規則を CI で検査 | 01 §1.7 |
+
+## T.5 コアユースケース → Manager
+
+| UC | Manager | 主な Engine |
+| --- | --- | --- |
+| UC-01 次元の検査 | CMP-M01 | E01, E02 |
+| UC-02 曲線座標 | CMP-M01 | E02, E03 |
+| UC-03 場空間と時空 | CMP-M01 | E02, E03, E04 |
+| UC-04 座標変換 | CMP-M01 | E02 |
+| UC-05 エラー文から直す | CMP-M01（エラー文は CMP-U03） | E01〜E04 |
+| UC-06 利用者が定義する | —（拡張点の実装） | E01, E02, E03 |
+| UC-07 常微分方程式 | CMP-M02 | E05, E06, E08 |
+| UC-08 定積分 | CMP-M02 | E06, E07 |
+
+コールチェーン（CC）は 2b で定める。
