@@ -38,7 +38,7 @@
 | API-11 | `tensorcheck::spaces` | 用意した空間・座標系・計量テンソル・座標変換：3 次元 Euclid 空間（デカルト、極（2 次元）、円柱、球）、Minkowski 時空（デカルト）、半径を指定する 2 次元球面、それぞれの計量テンソルと、デカルト座標との座標変換 | E02, E03 |
 | API-12 | `tensorcheck::VectorSpace` | 数値解法の状態の契約（U05）。テンソル、点、それらの組（要素が 2〜6 個）が実装する | U05 |
 | API-16 | `tensorcheck::geometry` | 接続・曲率・共変微分（API-50〜API-55） | M03 |
-| API-17 | `tensorcheck::autodiff::{Dual, HyperDual}` | 自動微分の数値の型（U02）。利用者が直接使うことは少なく、計量テンソルやテンソル場を数値の型によらない形で書けば、ライブラリが使う | U02 |
+| API-17 | `tensorcheck::autodiff::{Dual, Dual2}` | 自動微分の数値の型（U02）。利用者が直接使うことは少なく、計量テンソルやテンソル場を数値の型によらない形で書けば、ライブラリが使う | U02 |
 | API-13 | `tensorcheck_numerics::ode` | 常微分方程式：`solve_ivp`、`solve_second_order`、解法の型、許容値、解、失敗 | M02 |
 | API-14 | `tensorcheck_numerics::quad` | 定積分：`integrate`、解法の型、結果、失敗 | M02 |
 | API-15 | `tensorcheck_numerics::diff` | 数値微分：`derivative`、`jacobian`、方式の型 | M02 |
@@ -243,7 +243,7 @@ impl Metric for SphereMetric {
 
 | ID | 利用するもの | 用途 | 使う範囲 | 版の決め方 |
 | --- | --- | --- | --- | --- |
-| USE-01 | Rust の言語と `core` | すべて | 実行時 | `rust-toolchain.toml` で固定（1.99.0）。MSRV は OPEN-05 |
+| USE-01 | Rust の言語と標準ライブラリ（std） | すべて | 実行時 | `rust-toolchain.toml` で固定（1.99.0）。MSRV は OPEN-05 |
 | USE-02 | コンパイラの診断機能 `#[diagnostic::on_unimplemented]` | エラー文（ERR） | コンパイル時 | USE-01 に含まれる（Rust 1.78 で安定化） |
 | USE-03 | Cargo の workspace | 2 つのクレートの構成（01 §1.8） | 開発 | USE-01 に含まれる |
 | USE-04 | コンパイル失敗のテスト用のクレート（trybuild） | ERR の文をテストする（NFR-08） | 開発だけ（`dev-dependencies`） | Dependabot で更新 |

@@ -113,7 +113,7 @@ flowchart LR
 | FR-26 Christoffel 記号 | CMP-M03, CMP-E02, CMP-E03, CMP-E08, CMP-E09 |
 | FR-27 曲率 | CMP-M03, CMP-E02, CMP-E03, CMP-E04, CMP-E08, CMP-E09 |
 | FR-28 ほかの数値型 | CMP-U02（将来） |
-| NFR-01 stable・`no_std`・依存なし | すべて（01 §1.8） |
+| NFR-01 stable・std・依存なし | すべて（01 §1.8） |
 | NFR-03 型の情報は実行時の大きさを持たない | CMP-U01, CMP-A01 |
 | NFR-05 エラー文は見出しでわかる | CMP-U03 |
 | NFR-07 英語 | CMP-U03, CMP-C02 |
@@ -202,11 +202,36 @@ flowchart LR
 
 将来の FR（FR-17、FR-23、FR-24、FR-28）は、外部インターフェースをまだ持たない。
 
+## T.10 詳細設計 → 構成要素・要件
+
+| DD | 構成要素 | 主な要件 |
+| --- | --- | --- |
+| DD-01 ファイル配置と呼び出しの規則 | すべて | NFR-10, NFR-11, NFR-12 |
+| DD-02 型レベルの整数・真偽・並び | CMP-U01 | NFR-01, NFR-03 |
+| DD-03 次元と単位 | CMP-E01 | FR-01, FR-02, FR-03 |
+| DD-04 空間・座標系・点と成分の持ち方 | CMP-E02, CMP-A01 | FR-04, FR-05, FR-06, FR-12, NFR-02, NFR-03 |
+| DD-05 テンソルの型と基本の演算 | CMP-M01 | FR-01, FR-03, FR-06, FR-08 |
+| DD-06 ラベルと縮約 | CMP-E02, CMP-M01 | FR-07, FR-08 |
+| DD-07 対称性 | CMP-E04, CMP-A01 | FR-10 |
+| DD-08 計量テンソル・座標変換・逆行列 | CMP-E03, CMP-E02, CMP-U04 | FR-09, FR-11 |
+| DD-09 数値の型と自動微分 | CMP-U02, CMP-E08 | FR-16, FR-25 |
+| DD-10 接続と曲率、共変微分 | CMP-E09, CMP-M03 | FR-15, FR-26, FR-27 |
+| DD-11 数値解法の状態 | CMP-U05 | FR-18, FR-20 |
+| DD-12 常微分方程式の解法 | CMP-E05, CMP-M02 | FR-18, FR-19 |
+| DD-13 誤差の測り方と刻み幅の調整 | CMP-E06 | FR-18, FR-20, FR-22 |
+| DD-14 定積分 | CMP-E07, CMP-M02 | FR-20 |
+| DD-15 差分による数値微分 | CMP-E08 | FR-19, FR-21 |
+| DD-16 エラー文の実装 | CMP-U03 | FR-13, NFR-05, NFR-08 |
+| DD-17 失敗の型 | CMP-M02, CMP-U04 | FR-22 |
+| DD-18 利用者向けのマクロ | C01 向け | FR-02, FR-04, FR-05 |
+| DD-19 試作で確かめたこと | — | NFR-01, NFR-02, NFR-03 |
+| DD-20 ビルドと CI | — | NFR-11, NFR-13, NFR-14 |
+
 ## T.9 外部から利用するもの → 要件
 
 | USE | 要件 |
 | --- | --- |
-| USE-01 Rust と `core` | NFR-01 |
+| USE-01 Rust と std | NFR-01 |
 | USE-02 診断機能 | FR-13, NFR-05 |
 | USE-03 workspace | NFR-01（01 §1.8） |
 | USE-04 コンパイル失敗のテスト | NFR-08 |
