@@ -88,9 +88,9 @@ flowchart LR
 | FR-06 任意の階数のテンソル | CMP-M01, CMP-E01, CMP-E02, CMP-A01 |
 | FR-07 縮約 | CMP-M01, CMP-E02, CMP-A01 |
 | FR-08 足し算・外積・トレース | CMP-M01, CMP-E01, CMP-E02, CMP-E04, CMP-A01 |
-| FR-09 計量と上げ下げ | CMP-M01, CMP-E02, CMP-E03 |
+| FR-09 計量と上げ下げ | CMP-M01, CMP-E02, CMP-E03, CMP-U04 |
 | FR-10 対称性 | CMP-M01, CMP-E04 |
-| FR-11 座標系の変換 | CMP-M01, CMP-E02 |
+| FR-11 座標系の変換 | CMP-M01, CMP-E02, CMP-U04 |
 | FR-12 成分の取り出し | CMP-M01, CMP-E01, CMP-E02, CMP-A01 |
 | FR-13 エラー文 | CMP-U03 |
 | FR-14 例題 | CMP-C02 |
@@ -124,4 +124,36 @@ flowchart LR
 | UC-07 常微分方程式 | CMP-M02 | E05, E06, E08 |
 | UC-08 定積分 | CMP-M02 | E06, E07 |
 
-コールチェーン（CC）は 2b で定める。
+## T.6 コアユースケース → コールチェーン → 構成要素
+
+| UC | CC | 通る構成要素 |
+| --- | --- | --- |
+| UC-01 | CC-01 | C01, M01, E01, A01 |
+| UC-02 | CC-02 | C01, M01, E01, E02, E03, A01 |
+| UC-03 | CC-03 | C01, M01, E01, E02, E03, E04, A01 |
+| UC-04 | CC-04 | C01, M01, E02, E04, A01, U04 |
+| UC-05 | CC-05 | M01, E01, E02, E04, U03 |
+| UC-06 | CC-06 | C01（拡張点の実装） |
+| UC-07 | CC-07 | C01, M02, E05, E06, E08, U04, U05 |
+| UC-08 | CC-08 | C01, M02, E06, E07, U05 |
+
+## T.7 構成要素からの逆引き
+
+| 構成要素 | 変動性 | 要件 | CC |
+| --- | --- | --- | --- |
+| CMP-M01 TensorManager | VOL-13 | FR-01, FR-03, FR-06〜FR-12, FR-15 | CC-01〜CC-05 |
+| CMP-M02 SolverManager | VOL-13 | FR-18〜FR-22 | CC-07, CC-08 |
+| CMP-E01 DimensionEngine | VOL-01, VOL-02 | FR-01〜FR-03, FR-06, FR-08, FR-12 | CC-01〜CC-03, CC-05 |
+| CMP-E02 IndexEngine | VOL-03, VOL-04 | FR-04〜FR-09, FR-11, FR-12 | CC-02〜CC-05 |
+| CMP-E03 MetricEngine | VOL-05 | FR-09, FR-15 | CC-02, CC-03 |
+| CMP-E04 SymmetryEngine | VOL-06 | FR-08, FR-10 | CC-03〜CC-05 |
+| CMP-E05 OdeStepEngine | VOL-07 | FR-18, FR-19, FR-23 | CC-07 |
+| CMP-E06 ErrorControlEngine | VOL-08 | FR-18〜FR-20, FR-22 | CC-07, CC-08 |
+| CMP-E07 QuadratureEngine | VOL-09 | FR-20, FR-24 | CC-08 |
+| CMP-E08 DifferentiationEngine | VOL-10 | FR-19, FR-21 | CC-07 |
+| CMP-A01 ComponentAccess | VOL-11 | FR-06〜FR-08, FR-12, FR-17 | CC-01〜CC-04 |
+| CMP-U01 TypeLevel | — | NFR-01, NFR-03 | すべて（型の層） |
+| CMP-U02 Scalar | VOL-12 | FR-16 | すべて（値の層） |
+| CMP-U03 Diagnostics | — | FR-13, NFR-05, NFR-07 | CC-05 |
+| CMP-U04 LinearSolve | — | FR-09, FR-11, FR-19, FR-23 | CC-02〜CC-04, CC-07 |
+| CMP-U05 VectorSpace | — | FR-18, FR-20, FR-21 | CC-07, CC-08 |
