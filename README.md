@@ -30,6 +30,7 @@ cargo test
 cargo doc --no-deps
 python3 scripts/check_workflows.py
 python3 scripts/check_privacy.py
+python3 scripts/check_math.py
 ```
 
 ## License

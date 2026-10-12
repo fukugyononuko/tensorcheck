@@ -20,6 +20,8 @@ jobs:
           fetch-depth: 0 # 個人情報の検査で全コミットを確かめるため
       - name: Check workflows
         run: python3 scripts/check_workflows.py
+      - name: Check math notation
+        run: python3 scripts/check_math.py
       - name: Check privacy
         run: python3 scripts/check_privacy.py
         env:
