@@ -73,9 +73,9 @@ tensorcheck は、次の 2 つを提供する。
 | VOL-07 | 常微分方程式の解法 | RK4、Dormand–Prince 5(4)、leapfrog、Rosenbrock 法 → Radau IIA、BDF（FR-23） | 利用者、時間 | CMP-E05 OdeStepEngine |
 | VOL-08 | 誤差の測り方と、刻み幅・分割の調整 | 成分ごとの相対・絶対誤差の混合ノルム → 最大値ノルム。単純な刻み幅の調整 → PI 制御 | 利用者、時間 | CMP-E06 ErrorControlEngine |
 | VOL-09 | 定積分の解法 | 台形、Simpson、Romberg、Gauss–Legendre、適応型 Gauss–Kronrod → 無限区間・多次元（FR-24） | 利用者、時間 | CMP-E07 QuadratureEngine |
-| VOL-10 | 微分の求め方 | 自動微分（双対数・超双対数）、差分（中心差分、Richardson 補外）→ 複素ステップ微分、逆方向の自動微分 | 利用者、時間 | CMP-E08 DifferentiationEngine |
+| VOL-10 | 微分の求め方 | 自動微分（1 階・2 階の双対数）、差分（中心差分、Richardson 補外）→ 複素ステップ微分、逆方向の自動微分 | 利用者、時間 | CMP-E08 DifferentiationEngine |
 | VOL-11 | 成分の持ち方 | 密な配列 → 対称性を使った圧縮（FR-17） | 時間 | CMP-A01 ComponentAccess |
-| VOL-12 | 数値の型 | `f64`、双対数、超双対数（FR-16）→ `f32` など（FR-28） | 時間 | CMP-U02 Scalar |
+| VOL-12 | 数値の型 | `f64`、1 階・2 階の双対数（FR-16）→ `f32` など（FR-28） | 時間 | CMP-U02 Scalar |
 | VOL-13 | ユースケースの手順 | 演算の組み合わせ方（縮約・上げ下げ・座標変換の順序）、幾何量の組み立て方（微分 → 接続 → 曲率）、数値解法の進め方（評価 → 1 歩 → 誤差の判定 → 刻みの調整） | 時間 | CMP-M01 TensorManager / CMP-M03 GeometryManager / CMP-M02 SolverManager |
 | VOL-14 | 接続 | 計量テンソルから決まる Levi-Civita 接続 → ねじれを持つ接続、利用者が係数を与える接続（OPEN-08） | 利用者、時間 | CMP-E09 ConnectionEngine |
 
@@ -159,7 +159,7 @@ Utility はすべての層から使えるので、図では矢印を省く。
 | CMP-E09 ConnectionEngine | 計量テンソルとその微分から、接続の係数と Riemann テンソルを計算する | VOL-14 | UC-09 |
 | CMP-A01 ComponentAccess | 成分を記憶領域にどう並べるかを隠し、添字の組で読み書きさせる | VOL-11 | すべて |
 | CMP-U01 TypeLevel | 型レベルの整数と、型の並び | — | すべて |
-| CMP-U02 Scalar | 成分の数値の型の契約と、その実装（`f64`、双対数、超双対数） | VOL-12 | すべて |
+| CMP-U02 Scalar | 成分の数値の型の契約と、その実装（`f64`、1 階・2 階の双対数） | VOL-12 | すべて |
 | CMP-U03 Diagnostics | 誤りの種類ごとのコンパイルエラーの文（英語。NFR-07） | — | UC-05 |
 | CMP-U04 LinearSolve | 小さな行列の逆と連立一次方程式の解法。大きさ 4 以下は余因子行列による解析的な式、5 以上は部分ピボット選択つき LU 分解。計量テンソルの逆、Jacobi 行列の逆、硬い方程式の解法で使う | — | UC-02〜UC-04、UC-07 |
 | CMP-U05 VectorSpace | 「足せて、数で掛けられ、大きさを測れる」ものの契約。常微分方程式の状態と、積分の結果が満たす | — | UC-07、UC-08 |
@@ -191,7 +191,8 @@ SolverManager は、状態の足し算やスカラー倍を TensorManager に頼
 
 | ID | リソース | 説明 | 使う構成要素 |
 | --- | --- | --- | --- |
-| RES-01 | 成分の記憶領域 | テンソルの成分を置くメモリ。大きさはコンパイル時に決まり、ヒープを使わない（`no_std`。NFR-01） | CMP-A01 ComponentAccess |
+| RES-01 | 成分の記憶領域 | テンソルの成分を置くメモリ。大きさはコンパイル時に決まり、ヒープを使わない | CMP-A01 ComponentAccess |
+| RES-02 | 数値解法の作業領域 | 適応型の積分の区間の一覧など、実行時に大きさが決まるもの。ヒープ（std の `Vec`）を使う | CMP-E06, CMP-E07 |
 
 ファイル・ネットワーク・データベースなどの外部のリソースは使わない。利用者が渡す関数（右辺、被積分関数、計量テンソル、座標変換）は、リソースではなく Client が実装する拡張点として扱う。
 
@@ -225,4 +226,4 @@ SolverManager は、状態の足し算やスカラー倍を TensorManager に頼
 - 数値計算が要らない利用者は、`tensorcheck` だけを使える。コンパイル時間も短くなる。
 - 同じリポジトリに置くので、両方を同時に変える PR を 1 つにまとめられる。
 
-どちらも `no_std` で、外部のクレートに依存しない（NFR-01）。
+どちらも std を前提にし、外部のクレートに依存しない（NFR-01。`no_std` は OPEN-09）。
