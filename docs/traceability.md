@@ -14,6 +14,7 @@ flowchart LR
   CMP --> API & EXT & ERR & USE
   CMP --> DD
   DD --> TC
+  FR & NFR --> TC
   VOL --> TCR["TC-R"]
 ```
 
@@ -226,6 +227,49 @@ flowchart LR
 | DD-18 利用者向けのマクロ | C01 向け | FR-02, FR-04, FR-05 |
 | DD-19 試作で確かめたこと | — | NFR-01, NFR-02, NFR-03 |
 | DD-20 ビルドと CI | — | NFR-11, NFR-13, NFR-14 |
+
+## T.11 要件 → テスト
+
+| 要件 | テスト |
+| --- | --- |
+| FR-01 次元つきの量 | TC-U01, TC-U02, TC-I01, TC-F01, TC-E01 |
+| FR-02 単位系の定義 | TC-U02, TC-R01 |
+| FR-03 単位を指定した入出力 | TC-U02, TC-F02, TC-R02 |
+| FR-04 空間の定義 | TC-I03, TC-R03 |
+| FR-05 座標系の定義 | TC-I05, TC-R04 |
+| FR-06 任意の階数のテンソル | TC-U03, TC-F03 |
+| FR-07 縮約 | TC-U04, TC-U13, TC-F04, TC-F05, TC-F06, TC-F07, TC-F08 |
+| FR-08 足し算・外積・トレース | TC-U04, TC-F01, TC-F03, TC-F13 |
+| FR-09 計量テンソルと上げ下げ | TC-U07, TC-I02, TC-I03, TC-F09, TC-R05 |
+| FR-10 対称性 | TC-U06, TC-F12, TC-F13 |
+| FR-11 座標系の変換 | TC-U08, TC-I04, TC-F10, TC-R04 |
+| FR-12 成分の取り出し | TC-U05, TC-F11 |
+| FR-13 エラー文 | TC-F01〜TC-F18 |
+| FR-14 例題 | TC-E01〜TC-E07 |
+| FR-15 共変微分 | TC-U12 |
+| FR-16 自動微分の数値の型 | TC-U09, TC-F18 |
+| FR-18 常微分方程式 | TC-U23, TC-U24, TC-I06, TC-F14, TC-F15 |
+| FR-19 硬い常微分方程式 | TC-U25, TC-E05 |
+| FR-20 定積分 | TC-U21, TC-U22, TC-I07, TC-E06 |
+| FR-21 数値微分 | TC-U26 |
+| FR-22 誤差の許容値と失敗の知らせ | TC-U20, TC-U27 |
+| FR-25 テンソル場 | TC-U12 |
+| FR-26 Christoffel 記号 | TC-U10, TC-F16, TC-F17 |
+| FR-27 曲率 | TC-U11, TC-I08, TC-E07 |
+| NFR-01 std・依存なし | TC-A03 |
+| NFR-02 実行時のコストなし | TC-N01 |
+| NFR-03 型の大きさ | TC-U03, TC-N02 |
+| NFR-04 コンパイル時間 | TC-N03 |
+| NFR-05 見出しでわかるエラー文 | TC-F01〜TC-F17 |
+| NFR-06 ドキュメント | TC-N04 |
+| NFR-07 英語 | TC-N05 |
+| NFR-08 コンパイル失敗のテスト | TC-N06, TC-F19 |
+| NFR-09 数値の正しさ | TC-U07〜TC-U12, TC-U21〜TC-U26, TC-I01〜TC-I08 |
+| NFR-10 変化は 1 つの構成要素で | TC-R01〜TC-R05（VOL-06〜VOL-14 はレビュー） |
+| NFR-11 呼び出しの規則 | TC-A01, TC-A04 |
+| NFR-12 `unsafe` なし | TC-A02 |
+| NFR-13 個人情報 | TC-N07 |
+| NFR-14 セキュリティ | TC-N08 |
 
 ## T.9 外部から利用するもの → 要件
 
