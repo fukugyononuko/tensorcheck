@@ -21,7 +21,7 @@ pub use engine::index::{
     Chart, ChartBound, CoordinateBasis, Down, Label, NonCoordinateBasis, Space, Tensorial, Up,
 };
 pub use engine::symmetry::{Antisymmetric, NoSym, Symmetric};
-pub use manager::tensor::{Covector, Labeled, Quantity, Tensor, Vector};
+pub use manager::tensor::{Covector, Labeled, Quantity, Rank2, Rank3, Rank4, Tensor, Vector};
 pub use utility::scalar::Scalar;
 
 /// Dimension arithmetic on types (API-07).

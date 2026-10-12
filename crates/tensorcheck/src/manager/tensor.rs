@@ -33,6 +33,15 @@ pub type Quantity<D, N = f64> = Tensor<D, Nil, NoSym, Tensorial, N>;
 pub type Vector<D, C, N = f64> = Tensor<D, Cons<Up<C>, Nil>, NoSym, Tensorial, N>;
 /// A covector (one lower index) in chart `C` (API-02).
 pub type Covector<D, C, N = f64> = Tensor<D, Cons<Down<C>, Nil>, NoSym, Tensorial, N>;
+/// A rank-2 tensor with slots `A`, `B` (each `Up<C>` or `Down<C>`).
+pub type Rank2<D, A, B, Sym = NoSym, K = Tensorial, N = f64> =
+    Tensor<D, Cons<A, Cons<B, Nil>>, Sym, K, N>;
+/// A rank-3 tensor with slots `A`, `B`, `C`.
+pub type Rank3<D, A, B, C, Sym = NoSym, K = Tensorial, N = f64> =
+    Tensor<D, Cons<A, Cons<B, Cons<C, Nil>>>, Sym, K, N>;
+/// A rank-4 tensor with slots `A`, `B`, `C`, `E`.
+pub type Rank4<D, A, B, C, E, Sym = NoSym, K = Tensorial, N = f64> =
+    Tensor<D, Cons<A, Cons<B, Cons<C, Cons<E, Nil>>>>, Sym, K, N>;
 
 impl<D, S: Slots, Sym, K, N: Scalar> Clone for Tensor<D, S, Sym, K, N> {
     fn clone(&self) -> Self {

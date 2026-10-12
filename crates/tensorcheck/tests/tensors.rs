@@ -7,10 +7,9 @@ use tensorcheck::spaces::plane::{Polar, R, Theta};
 use tensorcheck::units::si::{
     Acceleration, Dimensionless, Force, Length, N, Velocity, kg, m, one, rad, s,
 };
-use tensorcheck::utility::typelevel::{Cons, Nil};
-use tensorcheck::{Down, Quantity, Tensor, Up, Vector};
+use tensorcheck::{Down, Quantity, Rank2, Rank4, Tensor, Up, Vector};
 
-type T2<C1, C2> = Tensor<Dimensionless, Cons<C1, Cons<C2, Nil>>>;
+type T2<C1, C2> = Rank2<Dimensionless, C1, C2>;
 type UpC = Up<Cartesian>;
 type DnC = Down<Cartesian>;
 
@@ -26,10 +25,9 @@ fn storage_size_is_components_times_scalar() {
     assert_eq!(size_of::<T2<UpC, DnC>>(), 9 * 8);
     tensorcheck::space!(Five, 5);
     tensorcheck::chart!(F5 on Five { X1: Length, X2: Length, X3: Length, X4: Length, X5: Length });
-    type R4 =
-        Tensor<Dimensionless, Cons<Up<F5>, Cons<Down<F5>, Cons<Down<F5>, Cons<Down<F5>, Nil>>>>>;
+    type R4 = Rank4<Dimensionless, Up<F5>, Down<F5>, Down<F5>, Down<F5>>;
     assert_eq!(size_of::<R4>(), 625 * 8);
-    type Mixed = Tensor<Dimensionless, Cons<Down<Cartesian>, Cons<Up<Polar>, Nil>>>;
+    type Mixed = Rank2<Dimensionless, Down<Cartesian>, Up<Polar>>;
     assert_eq!(size_of::<Mixed>(), 6 * 8);
 }
 
@@ -161,7 +159,7 @@ tensorcheck::chart!(Phi3 on Fields3 { P1: Dimensionless, P2: Dimensionless, P3: 
 
 #[test]
 fn user_defined_field_space() {
-    let g: Tensor<Dimensionless, Cons<Down<Phi3>, Cons<Down<Phi3>, Nil>>> =
+    let g: Rank2<Dimensionless, Down<Phi3>, Down<Phi3>> =
         Tensor::from_components([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 3.0]], one);
     let dphi: Vector<Dimensionless, Phi3> = Vector::from_components([1.0, 1.0, 2.0], one);
     let kin = (g.idx((I, J)) * dphi.idx(I) * dphi.idx(J)).into_tensor();
