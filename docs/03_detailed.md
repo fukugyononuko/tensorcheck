@@ -341,9 +341,9 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 | --- | --- | --- | --- |
 | `Rk4 { h }` | 陽的、固定刻み | 4（なし） | 古典的な Runge–Kutta 法 |
 | `DormandPrince54` | 陽的、埋め込み、適応刻み、FSAL | 5（4） | Dormand & Prince (1980) |
-| `Leapfrog { h }` | シンプレクティック、2 階の方程式、固定刻み | 2（なし） | kick–drift–kick 形式 |
 | `Rosenbrock` | 線形陰的、L 安定、埋め込み、適応刻み | 4（3） | Hairer & Wanner, *Solving ODEs II*（1996）の RODAS4 |
 
+- 入口は `solve_ivp` だけで、2 階専用の解法は持たない（FR-18）。シンプレクティック法は将来（FR-29）。
 - 係数は、出典の表をそのまま定数として書き、出典をコメントに書く。
 - Rosenbrock 法の 1 歩：$`W = I - h\gamma J`$ を 1 回 LU 分解し（U04）、各段の線形方程式を同じ分解で解く。$`J`$ は利用者が与えるか、右辺が数値の型によらない形なら `Dual` で、そうでなければ差分（DD-15）で求める。
 - 時間の向きは負でもよい（$`t_1 < t_0`$）。

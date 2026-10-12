@@ -70,7 +70,7 @@ tensorcheck は、次の 2 つを提供する。
 | VOL-04 | 座標系（基底） | デカルト、極、球。座標基底か正規直交基底か（座標基底でない基底での接続と曲率は OPEN-10）。場空間では場の選び方（場の再定義） | 利用者 | CMP-E02 IndexEngine |
 | VOL-05 | 計量テンソル | 定数（Euclid、Minkowski）→ 位置に依存（曲線座標、場空間の $`G_{IJ}(\phi)`$）。符号の取り方（$`+{-}{-}{-}`$ / $`{-}{+}{+}{+}`$） | 利用者 | CMP-E03 MetricEngine |
 | VOL-06 | 対称性の種類 | なし、対称、反対称 → 一部の添字だけ対称 | 利用者、時間 | CMP-E04 SymmetryEngine |
-| VOL-07 | 常微分方程式の解法 | RK4、Dormand–Prince 5(4)、leapfrog、Rosenbrock 法 → Radau IIA、BDF（FR-23） | 利用者、時間 | CMP-E05 OdeStepEngine |
+| VOL-07 | 常微分方程式の解法 | RK4、Dormand–Prince 5(4)、Rosenbrock 法 → Radau IIA、BDF（FR-23）、シンプレクティック法（FR-29） | 利用者、時間 | CMP-E05 OdeStepEngine |
 | VOL-08 | 誤差の測り方と、刻み幅・分割の調整 | 成分ごとの相対・絶対誤差の混合ノルム → 最大値ノルム。単純な刻み幅の調整 → PI 制御 | 利用者、時間 | CMP-E06 ErrorControlEngine |
 | VOL-09 | 定積分の解法 | 台形、Simpson、Romberg、Gauss–Legendre、適応型 Gauss–Kronrod → 無限区間・多次元（FR-24） | 利用者、時間 | CMP-E07 QuadratureEngine |
 | VOL-10 | 微分の求め方 | 自動微分（1 階・2 階の双対数）、差分（中心差分、Richardson 補外）→ 複素ステップ微分、逆方向の自動微分 | 利用者、時間 | CMP-E08 DifferentiationEngine |

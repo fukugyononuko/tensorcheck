@@ -27,7 +27,7 @@ flowchart LR
 | BR-03 誤りの内容がわかる | FR-03, FR-13, FR-14 | NFR-04, NFR-05, NFR-06, NFR-07, NFR-08 |
 | BR-04 書き換えずに対応できる | FR-02, FR-03, FR-04, FR-05, FR-09, FR-11, FR-16, FR-25, FR-28 | NFR-01, NFR-10, NFR-11 |
 | BR-05 遅くしない | FR-17 | NFR-01, NFR-02, NFR-03, NFR-12 |
-| BR-06 数値計算でも検査を保つ | FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24 | NFR-09 |
+| BR-06 数値計算でも検査を保つ | FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-29 | NFR-09 |
 | BR-07 個人情報を含めない | — | NFR-13, NFR-14 |
 
 ## T.2 機能要件 → コアユースケース
@@ -62,6 +62,7 @@ flowchart LR
 | FR-26 Christoffel 記号 | UC-09 | 初期 |
 | FR-27 曲率 | UC-09 | 初期 |
 | FR-28 ほかの数値型 | — | 将来 |
+| FR-29 シンプレクティック法 | — | 将来 |
 
 ## T.3 変動性 → 構成要素
 
@@ -114,6 +115,7 @@ flowchart LR
 | FR-26 Christoffel 記号 | CMP-M03, CMP-E02, CMP-E03, CMP-E08, CMP-E09 |
 | FR-27 曲率 | CMP-M03, CMP-E02, CMP-E03, CMP-E04, CMP-E08, CMP-E09 |
 | FR-28 ほかの数値型 | CMP-U02（将来） |
+| FR-29 シンプレクティック法 | CMP-E05（将来） |
 | NFR-01 stable・std・依存なし | すべて（01 §1.8） |
 | NFR-03 型の情報は実行時の大きさを持たない | CMP-U01, CMP-A01 |
 | NFR-05 エラー文は見出しでわかる | CMP-U03 |
@@ -192,7 +194,7 @@ flowchart LR
 | FR-14 例題 | §2a.2 の使い方の例 | — | — |
 | FR-15 共変微分 | API-16, API-54 | EXT-08 | ERR-17 |
 | FR-16 自動微分の数値の型 | API-17 | EXT-06, EXT-08 | ERR-18 |
-| FR-18 常微分方程式 | API-12, API-13, API-40, API-41, API-42, API-43, API-44, API-45 | EXT-07 | ERR-14, ERR-15 |
+| FR-18 常微分方程式 | API-12, API-13, API-40, API-42, API-43, API-44, API-45 | EXT-07 | ERR-14, ERR-15 |
 | FR-19 硬い常微分方程式 | API-42 | EXT-07 | — |
 | FR-20 定積分 | API-14, API-46, API-47, API-48 | EXT-07 | — |
 | FR-21 数値微分 | API-15, API-49 | EXT-07 | — |
@@ -201,7 +203,7 @@ flowchart LR
 | FR-26 Christoffel 記号 | API-16, API-50, API-51, API-53 | EXT-06 | ERR-16, ERR-17, ERR-19 |
 | FR-27 曲率 | API-16, API-52, API-53 | EXT-06 | — |
 
-将来の FR（FR-17、FR-23、FR-24、FR-28）は、外部インターフェースをまだ持たない。
+将来の FR（FR-17、FR-23、FR-24、FR-28、FR-29）は、外部インターフェースをまだ持たない。API-41 は廃止。
 
 ## T.10 詳細設計 → 構成要素・要件
 
@@ -248,7 +250,7 @@ flowchart LR
 | FR-14 例題 | TC-E01〜TC-E07 |
 | FR-15 共変微分 | TC-U12 |
 | FR-16 自動微分の数値の型 | TC-U09, TC-F18 |
-| FR-18 常微分方程式 | TC-U23, TC-U24, TC-I06, TC-F14, TC-F15 |
+| FR-18 常微分方程式 | TC-U23, TC-I06, TC-F14, TC-F15 |
 | FR-19 硬い常微分方程式 | TC-U25, TC-E05 |
 | FR-20 定積分 | TC-U21, TC-U22, TC-I07, TC-E06 |
 | FR-21 数値微分 | TC-U26 |
