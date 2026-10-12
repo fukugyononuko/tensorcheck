@@ -190,6 +190,18 @@ impl<B> And<B> for False {
     type Out = False;
 }
 
+/// Logical or.
+pub trait Or<B> {
+    /// The result.
+    type Out: Bool;
+}
+impl<B> Or<B> for True {
+    type Out = True;
+}
+impl<B: Bool> Or<B> for False {
+    type Out = B;
+}
+
 /// Element-wise equality of two lists of integers of equal length.
 pub trait IntListEq<B> {
     /// The result.
@@ -391,3 +403,26 @@ impl<A: Int, T: IntList> IntList for Cons<A, T> {
         T::write(&mut out[1..]);
     }
 }
+
+/// Maps a `const` natural number to its type-level natural, for `0..64`.
+pub struct ConstNat<const K: usize>;
+
+/// Implemented by [`ConstNat<K>`] for supported `K`.
+pub trait ToNat {
+    /// The type-level natural.
+    type Out: Nat + NatEq<Self::Out>;
+}
+
+macro_rules! const_nats {
+    ($prev:ty; $k:literal $(, $rest:literal)*) => {
+        impl ToNat for ConstNat<$k> { type Out = S<$prev>; }
+        const_nats!(S<$prev>; $($rest),*);
+    };
+    ($prev:ty;) => {};
+}
+impl ToNat for ConstNat<0> {
+    type Out = Z;
+}
+const_nats!(Z; 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+    26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+    51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63);

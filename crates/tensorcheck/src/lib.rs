@@ -4,17 +4,24 @@
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+// The checks are done by type-level computation, so long types are the norm here.
+#![allow(clippy::type_complexity)]
 
 pub mod access;
 pub mod engine;
+pub mod labels;
+mod macros;
 pub mod manager;
+pub mod spaces;
 pub mod units;
 pub mod utility;
 
 pub use engine::dimension::{Dim, Pow, Prod, Quot, Unit, UnitSystem};
-pub use engine::index::{ChartBound, Tensorial};
+pub use engine::index::{
+    Chart, ChartBound, CoordinateBasis, Down, Label, NonCoordinateBasis, Space, Tensorial, Up,
+};
 pub use engine::symmetry::{Antisymmetric, NoSym, Symmetric};
-pub use manager::tensor::{Quantity, Tensor};
+pub use manager::tensor::{Covector, Labeled, Quantity, Rank2, Rank3, Rank4, Tensor, Vector};
 pub use utility::scalar::Scalar;
 
 /// Dimension arithmetic on types (API-07).
