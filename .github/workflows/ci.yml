@@ -20,6 +20,15 @@ jobs:
           fetch-depth: 0 # 個人情報の検査で全コミットを確かめるため
       - name: Check workflows
         run: python3 scripts/check_workflows.py
+      - name: Check layers and unsafe (TC-A01, TC-A02)
+        run: |
+          python3 scripts/check_layers.py
+          # The check must catch violations: the fixture breaks the rules on purpose.
+          ! python3 scripts/check_layers.py scripts/fixtures/layers_bad
+      - name: Check runtime dependencies (TC-A03, TC-A04)
+        run: python3 scripts/check_deps.py
+      - name: Check English (TC-N05)
+        run: python3 scripts/check_english.py
       - name: Check math notation
         run: python3 scripts/check_math.py
       - name: Check privacy
@@ -32,10 +41,10 @@ jobs:
       - name: Format
         run: cargo fmt --check
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
-        run: cargo test
+        run: cargo test --workspace
       - name: Doc
-        run: cargo doc --no-deps
+        run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: -D warnings

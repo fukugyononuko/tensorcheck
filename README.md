@@ -25,9 +25,12 @@ Requires Rust (version pinned in `rust-toolchain.toml`) and Python 3 (for the ch
 
 ```sh
 cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-cargo doc --no-deps
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo doc --workspace --no-deps
+python3 scripts/check_layers.py
+python3 scripts/check_deps.py
+python3 scripts/check_english.py
 python3 scripts/check_workflows.py
 python3 scripts/check_privacy.py
 python3 scripts/check_math.py
