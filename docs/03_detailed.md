@@ -99,7 +99,7 @@ pub trait Unit: Copy + 'static {         // EXT-02
 - 次元の一致は `SameDimension<D2>` で確かめる。`impl<D> SameDimension<D> for D` だけを実装し、この trait に ERR-01 の文をつける。
 - 単位どうしの積・商・べき（`m / s`、`s.pow::<2>()`）は、`Prod<U1, U2>` などの型を作る。`FACTOR` は関連定数の浮動小数点の演算（`const` での演算は stable）で求める。
 - 単位は比例するものだけを扱う（摂氏温度のような原点のずれる単位は扱わない）。
-- 自然単位系（API-06）は、基本次元を「質量」の 1 つにする。$`\mathrm{eV}`$、$`\mathrm{GeV}`$、換算プランク質量 $`M_\mathrm{P} = 2.435 \times 10^{18}\,\mathrm{GeV}`$ を単位として用意する。基準の単位は $`\mathrm{GeV}`$。
+- 自然単位系（API-06）は、基本次元を「質量」の 1 つにする。$`\mathrm{eV}`$、$`\mathrm{GeV}`$、換算プランク質量 $`M_\mathrm{P} = (\hbar c / 8\pi G_N)^{1/2} = 2.435 \times 10^{18}\,\mathrm{GeV}`$（PDG 2024 の $`\hbar`$、$`c`$、$`G_N`$ から計算して確かめた）を単位として用意する。実装では、定数から計算した値を使う。基準の単位は $`\mathrm{GeV}`$。
 
 ## 3.4 DD-04 空間・座標系・点と、成分の持ち方（E02、A01）
 
@@ -340,8 +340,8 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 | 解法 | 種類 | 次数（誤差の見積もり） | 係数の出典 |
 | --- | --- | --- | --- |
 | `Rk4 { h }` | 陽的、固定刻み | 4（なし） | 古典的な Runge–Kutta 法 |
-| `DormandPrince54` | 陽的、埋め込み、適応刻み、FSAL | 5（4） | Dormand & Prince (1980) |
-| `Rosenbrock` | 線形陰的、L 安定、埋め込み、適応刻み | 4（3） | Hairer & Wanner, *Solving ODEs II*（1996）の RODAS4 |
+| `DormandPrince54` | 陽的、埋め込み、適応刻み、FSAL | 5（4） | Dormand & Prince, *J. Comput. Appl. Math.* 6(1), 19–26 (1980) |
+| `Rosenbrock` | 線形陰的、L 安定、埋め込み、適応刻み | 4（3） | Hairer & Wanner, *Solving Ordinary Differential Equations II*, §IV.7 の RODAS（4 次）。係数が載っている版（1991 年の初版か 1996 年の第 2 版か）は、資料によって食い違うので、実装のときに原典で確かめる |
 
 - 入口は `solve_ivp` だけで、2 階専用の解法は持たない（FR-18）。シンプレクティック法は将来（FR-29）。
 - 係数は、出典の表をそのまま定数として書き、出典をコメントに書く。
