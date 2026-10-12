@@ -1,0 +1,4 @@
+# 手元と CI で同じ Rust を使う
+[toolchain]
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]

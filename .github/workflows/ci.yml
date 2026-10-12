@@ -1,0 +1,39 @@
+# 書式・静的解析・テスト・ドキュメントと、ワークフロー・個人情報の検査を毎回実行する。外部の Action はコミット SHA で固定する。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # 個人情報の検査で全コミットを確かめるため
+      - name: Check workflows
+        run: python3 scripts/check_workflows.py
+      - name: Check privacy
+        run: python3 scripts/check_privacy.py
+        env:
+          PRIVACY_DENYLIST: ${{ secrets.PRIVACY_DENYLIST }}
+          # 式をシェルに直接埋め込まず、環境変数として渡す（PR の本文によるコマンドの注入を防ぐ）
+          PR_TEXT: ${{ github.event.pull_request.title }} ${{ github.event.pull_request.body }}
+      # rust-toolchain.toml の版を rustup が入れる
+      - name: Format
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Test
+        run: cargo test
+      - name: Doc
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
