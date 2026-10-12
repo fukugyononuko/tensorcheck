@@ -118,6 +118,7 @@ pub trait Chart: 'static {               // EXT-04
     type Space: Space;
     type Coords;                         // 座標の印の型の並び（例：Cons<R, Cons<Theta, Nil>>）
     type CoordDims;                      // 各座標の次元の並び
+    type Basis;                          // CoordinateBasis か NonCoordinateBasis
     const NAME: &'static str;
 }
 pub struct Up<C>(PhantomData<C>);
@@ -304,6 +305,7 @@ M03 は、点 $`p`$ で計量テンソルを `Dual2` で 1 回評価し、$`g_{a
 | スカラー曲率 | $`R = g^{bd} R_{bd}`$ | 次元 $`1/[g]`$ |
 | Einstein テンソル | $`G_{ab} = R_{ab} - \tfrac{1}{2} R\, g_{ab}`$ | 階数 2、`Symmetric` |
 
+- 前提：ここの式は、座標基底で書いた Levi-Civita 接続のもの。M03 の各操作は、計量テンソルの座標系に `IsCoordinateBasis`（ERR-19）を求める。座標基底でない基底では、係数が下付きの添字について対称でなく、式も変わる（OPEN-10）。
 - 型：Christoffel 記号は `Tensor<Dimensionless, (Up<C>, Down<C>, Down<C>), NoSym, ChartBound>`（API-50）。Riemann テンソルは同じく 4 つの枠を持つ `Tensorial` なテンソル。全体の次元はどちらも無次元で、成分の次元は DD-04 の式で決まる。
 - 共変微分 $`\nabla_c T`$：テンソル場を `Dual` で評価して $`\partial_c T`$（`ChartBound`）を得て、上付きの枠ごとに $`+\Gamma^{a}{}_{c e} T^{\cdots e \cdots}`$、下付きの枠ごとに $`-\Gamma^{e}{}_{c b} T_{\cdots e \cdots}`$ を足す。足し終えたものを M03 の中で `Tensorial` として返す。テンソル性を付け替えるのはこの関数だけで、`pub(crate)` の関数で行う。
 - 共変微分の結果の枠の並びは、場の枠の並びの後ろに `Down<C>` を 1 つつないだもの。
@@ -405,6 +407,7 @@ ERR ごとに専用の trait を 1 つ置き、`#[diagnostic::on_unimplemented]`
 | ERR-15 | `ToleranceFor<Y>` | `atol` の型 = `Y` |
 | ERR-16 | `IsTensor` | `Tensorial` |
 | ERR-17 | `SameKind<K2>` | 同じテンソル性 |
+| ERR-19 | `IsCoordinateBasis` | `Basis = CoordinateBasis` |
 
 - 文は 2a §2a.4 のとおり。`{L}` などには、ラベル・座標系・単位の型の名前が入るように、その型を trait の型引数にする。
 - 各 ERR について、コンパイル失敗のテスト（`tests/ui/*.rs` と、期待する出力 `*.stderr`）を置く（04 の TC-F）。期待する出力は見出しの行だけを比べる（下に続く補足の内部の型の名前は、コンパイラの版で変わるため）。
@@ -426,7 +429,7 @@ pub enum LinearError { Singular }
 | マクロ | 生成するもの |
 | --- | --- |
 | `space!(Spacetime, 4)` | 空の構造体と `Space` の実装（`Arr<T> = [T; 4]`、`SymArr<T> = [T; 10]`、`AntiArr<T> = [T; 6]` など、長さは数字から展開時に計算する） |
-| `chart!(Polar in Plane: r: Length, theta: Dimensionless)` | 座標系の構造体、座標の印の構造体（`R`、`Theta`）、`Chart` の実装 |
+| `chart!(Polar in Plane: r: Length, theta: Dimensionless)` | 座標系の構造体、座標の印の構造体（`R`、`Theta`）、`Chart` の実装（基底は座標基底。`chart!(… ; non_coordinate)` で座標基底でない基底） |
 | `unit_system!(…)` | 単位系の構造体と次元の別名 |
 | `label!(kappa = 40)` | ラベルの構造体と `Label` の実装 |
 

@@ -202,7 +202,7 @@ impl Metric for SphereMetric {
 | EXT-01 | `UnitSystem` | 基本次元の数（型レベルの整数）と、次元の名前（ドキュメントとエラー文用） | E01 | VOL-01 |
 | EXT-02 | `Unit` | 属する単位系、次元、基準の単位への換算係数 | E01 | VOL-02 |
 | EXT-03 | `Space` | 次元数 $`n`$（型レベルの整数）、名前 | E02 | VOL-03 |
-| EXT-04 | `Chart` | 属する空間、座標の型の並び、各座標の次元、名前 | E02 | VOL-04 |
+| EXT-04 | `Chart` | 属する空間、座標の型の並び、各座標の次元、基底の種類（`CoordinateBasis` か `NonCoordinateBasis`。`chart!` マクロの既定は座標基底）、名前 | E02 | VOL-04 |
 | EXT-05 | `ChartTransform` | 変換元と変換先の座標系、点の写し方、Jacobi 行列 $`\partial x'^a / \partial x^b`$。逆は省略できる（省略すると U04 で求める） | E02 | VOL-04 |
 | EXT-06 | `Metric` | 座標系、全体の次元、点での成分 $`g_{ab}(x)`$ を数値の型 `N` によらない形で。逆は省略できる | E03 | VOL-05 |
 | EXT-08 | `TensorField` | 座標系、返すテンソルの型、点での成分を数値の型 `N` によらない形で | M03 | — |
@@ -234,6 +234,7 @@ impl Metric for SphereMetric {
 | ERR-16 | テンソルでないもの（Christoffel 記号など）の座標変換 | `` `{T}` is not a tensor and cannot be transformed to another chart `` | `Christoffel symbols and partial derivatives depend on the chart; compute them in the target chart instead` | E02 |
 | ERR-17 | テンソルとテンソルでないものの足し算 | `cannot add a tensor and a chart-bound (non-tensor) quantity` | `use geometry::covariant_derivative to combine partial derivatives and Christoffel symbols` | E02 |
 | ERR-18 | 計量テンソル・テンソル場の成分が、数値の型によらない形で書かれていない | （差し替えられない。コンパイラ自身のエラー E0049「型引数の数が trait の宣言と合わない」が出る） | API ドキュメントと EXT-06・EXT-08 の説明に、数値の型によらない形で書く理由と書き方を載せる | コンパイラ |
+| ERR-19 | 座標基底でない座標系で、接続・曲率・共変微分を求める | `` `{C}` is not a coordinate basis; Christoffel symbols and curvature need a coordinate basis `` | `connection coefficients in non-coordinate bases (e.g. orthonormal frames) are not supported yet` | M03 |
 
 - 見出しの文言は実装時に、04 のコンパイル失敗のテスト（TC-F）で実際の出力を確かめて調整する。調整したらこの表も直す。
 - 判定する構成要素が M02 の誤り（ERR-14、ERR-15）は、M02 の公開する関数の型の制約として表す。

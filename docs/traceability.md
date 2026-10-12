@@ -188,7 +188,7 @@ flowchart LR
 | FR-10 対称性 | API-04, API-22, API-33 | — | ERR-12, ERR-13 |
 | FR-11 座標系の変換 | API-11, API-32 | EXT-05 | ERR-10, ERR-16 |
 | FR-12 成分の取り出し | API-24 | — | ERR-11 |
-| FR-13 エラー文 | — | — | ERR-01〜ERR-18 |
+| FR-13 エラー文 | — | — | ERR-01〜ERR-19 |
 | FR-14 例題 | §2a.2 の使い方の例 | — | — |
 | FR-15 共変微分 | API-16, API-54 | EXT-08 | ERR-17 |
 | FR-16 自動微分の数値の型 | API-17 | EXT-06, EXT-08 | ERR-18 |
@@ -198,7 +198,7 @@ flowchart LR
 | FR-21 数値微分 | API-15, API-49 | EXT-07 | — |
 | FR-22 誤差の許容値と失敗の知らせ | API-43, API-44, API-47, API-48 | — | ERR-15 |
 | FR-25 テンソル場 | API-55 | EXT-08 | ERR-18 |
-| FR-26 Christoffel 記号 | API-16, API-50, API-51, API-53 | EXT-06 | ERR-16, ERR-17 |
+| FR-26 Christoffel 記号 | API-16, API-50, API-51, API-53 | EXT-06 | ERR-16, ERR-17, ERR-19 |
 | FR-27 曲率 | API-16, API-52, API-53 | EXT-06 | — |
 
 将来の FR（FR-17、FR-23、FR-24、FR-28）は、外部インターフェースをまだ持たない。
@@ -244,7 +244,7 @@ flowchart LR
 | FR-10 対称性 | TC-U06, TC-F12, TC-F13 |
 | FR-11 座標系の変換 | TC-U08, TC-I04, TC-F10, TC-R04 |
 | FR-12 成分の取り出し | TC-U05, TC-F11 |
-| FR-13 エラー文 | TC-F01〜TC-F18 |
+| FR-13 エラー文 | TC-F01〜TC-F18, TC-F20 |
 | FR-14 例題 | TC-E01〜TC-E07 |
 | FR-15 共変微分 | TC-U12 |
 | FR-16 自動微分の数値の型 | TC-U09, TC-F18 |
@@ -254,13 +254,13 @@ flowchart LR
 | FR-21 数値微分 | TC-U26 |
 | FR-22 誤差の許容値と失敗の知らせ | TC-U20, TC-U27 |
 | FR-25 テンソル場 | TC-U12 |
-| FR-26 Christoffel 記号 | TC-U10, TC-U14, TC-F16, TC-F17 |
+| FR-26 Christoffel 記号 | TC-U10, TC-U14, TC-F16, TC-F17, TC-F20 |
 | FR-27 曲率 | TC-U11, TC-U14, TC-U15, TC-U16, TC-I08, TC-E07 |
 | NFR-01 std・依存なし | TC-A03 |
 | NFR-02 実行時のコストなし | TC-N01 |
 | NFR-03 型の大きさ | TC-U03, TC-N02 |
 | NFR-04 コンパイル時間 | TC-N03 |
-| NFR-05 見出しでわかるエラー文 | TC-F01〜TC-F17 |
+| NFR-05 見出しでわかるエラー文 | TC-F01〜TC-F17, TC-F20 |
 | NFR-06 ドキュメント | TC-N04 |
 | NFR-07 英語 | TC-N05 |
 | NFR-08 コンパイル失敗のテスト | TC-N06, TC-F19 |
