@@ -1,5 +1,5 @@
-//! 物理量の次元とテンソルの構造をコンパイル時に検査する。
+//! Compile-time checks for physical dimensions and tensor structure.
 //!
-//! 開発中。設計は `docs/` を参照。
+//! Work in progress. See `docs/` for the design.
 
 #![no_std]
