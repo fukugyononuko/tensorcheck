@@ -254,8 +254,8 @@ flowchart LR
 | FR-21 数値微分 | TC-U26 |
 | FR-22 誤差の許容値と失敗の知らせ | TC-U20, TC-U27 |
 | FR-25 テンソル場 | TC-U12 |
-| FR-26 Christoffel 記号 | TC-U10, TC-F16, TC-F17 |
-| FR-27 曲率 | TC-U11, TC-I08, TC-E07 |
+| FR-26 Christoffel 記号 | TC-U10, TC-U14, TC-F16, TC-F17 |
+| FR-27 曲率 | TC-U11, TC-U14, TC-U15, TC-U16, TC-I08, TC-E07 |
 | NFR-01 std・依存なし | TC-A03 |
 | NFR-02 実行時のコストなし | TC-N01 |
 | NFR-03 型の大きさ | TC-U03, TC-N02 |
@@ -264,7 +264,7 @@ flowchart LR
 | NFR-06 ドキュメント | TC-N04 |
 | NFR-07 英語 | TC-N05 |
 | NFR-08 コンパイル失敗のテスト | TC-N06, TC-F19 |
-| NFR-09 数値の正しさ | TC-U07〜TC-U12, TC-U21〜TC-U26, TC-I01〜TC-I08 |
+| NFR-09 数値の正しさ | TC-U07〜TC-U12, TC-U14〜TC-U16, TC-U21〜TC-U26, TC-I01〜TC-I08 |
 | NFR-10 変化は 1 つの構成要素で | TC-R01〜TC-R05（VOL-06〜VOL-14 はレビュー） |
 | NFR-11 呼び出しの規則 | TC-A01, TC-A04 |
 | NFR-12 `unsafe` なし | TC-A02 |
