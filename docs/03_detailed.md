@@ -57,7 +57,7 @@ crates/
 scripts/  check_privacy.py check_workflows.py check_layers.py
 ```
 
-- 層をまたいで共有する型（空間・座標系・枠・ラベル・点・テンソル性の印・枠の位置の印）は `src/contracts.rs` に置く。処理は持たない。Engine どうしが互いを参照せずに同じ型を使うため（The Method で、層の間のデータの契約を別にまとめるのと同じ）。どの層からも使えるが、契約自身は `access/`・`utility/` だけを使う（フェーズ 3 で追加）。
+- 層をまたいで共有する型（空間・座標系・枠・ラベル・点・テンソル性の印・枠の位置の印、フェーズ 5 からはテンソルの型 `Tensor` とその基本の作り方、対称性の印）は `src/contracts.rs` に置く。M03 も M01 もテンソルを作って返すので、テンソルの型を M01 に置くと Manager どうしの参照になるため。処理は持たない。Engine どうしが互いを参照せずに同じ型を使うため（The Method で、層の間のデータの契約を別にまとめるのと同じ）。どの層からも使えるが、契約自身は `access/`・`utility/` だけを使う（フェーズ 3 で追加）。
 - 層ごとにディレクトリを分ける。層の外に見せる項目は `pub(crate)`、クレートの外に見せる項目だけを `pub` にする。
 - `scripts/check_layers.py`（NFR-11）は、各ファイルの `use crate::…` と `tensorcheck::internal::…` を読み、01 §1.7 の表に反しないかを検査する。
   - `manager/` は `engine/`・`access/`・`utility/` だけを使う。ほかの `manager/` を使わない。
@@ -128,7 +128,7 @@ pub struct Point<C: Chart, N: Scalar = f64> { x: <C::Space as Space>::Arr<N> }
 ```
 
 - 具体的な配列の長さ（`[T; 4]` など）は、利用者が `space!` マクロ（DD-18）で空間を定義するときに書かれる。ライブラリの中では長さを計算しない。
-- 実装での補足（フェーズ 1）：長さ `N` と配列の型（`Arr`・`SymArr`・`AntiArr`、`from_fn`）は、成分の持ち方の関心ごとなので、A01 の trait `Extent` に置く。`Space` は `Extent` を親の trait とする。A01 が E02 の `Space` を参照すると、ResourceAccess から Engine への呼び出しになり、01 §1.7 に反するため。枠は A01 の trait `SlotExtent` で自分の `Extent` を示す。
+- 実装での補足（フェーズ 1、フェーズ 5 で変更）：長さ `N` と配列の型（`Arr`・`SymArr`・`AntiArr`、`from_fn`）は trait `Extent` にまとめる。フェーズ 1 では A01 に置いたが、双対数（U02）も使うので、フェーズ 5 で Utility（`utility/extent.rs`）に移した。`Space` は `Extent` を親の trait とする。A01 が E02 の `Space` を参照すると、ResourceAccess から Engine への呼び出しになり、01 §1.7 に反するため。枠は A01 の trait `SlotExtent` で自分の `Extent` を示す。
 - 枠の並び `S` から、成分の入れ物の型を入れ子の配列として組み立てる（A01）。
 
 ```rust
@@ -318,7 +318,8 @@ M03 は、点 $`p`$ で計量テンソルを `Dual2` で 1 回評価し、$`g_{a
 | Einstein テンソル | $`G_{ab} = R_{ab} - \tfrac{1}{2} R\, g_{ab}`$ | 階数 2、`Symmetric` |
 
 - 前提：ここの式は、座標基底で書いた Levi-Civita 接続のもの。M03 の各操作は、計量テンソルの座標系に `IsCoordinateBasis`（ERR-19）を求める。座標基底でない基底では、係数が下付きの添字について対称でなく、式も変わる（OPEN-10）。
-- 型：Christoffel 記号は `Tensor<Dimensionless, (Up<C>, Down<C>, Down<C>), NoSym, ChartBound>`（API-50）。Riemann テンソルは同じく 4 つの枠を持つ `Tensorial` なテンソル。全体の次元はどちらも無次元で、成分の次元は DD-04 の式で決まる。
+- 型：Christoffel 記号の全体の次元は $`1/[X]`$、Riemann・Ricci・Einstein テンソルは $`1/[X]^2`$、スカラー曲率は $`1/([g][X]^2)`$（DD-04 の規則による。フェーズ 3 で変更）。Christoffel 記号は `ChartBound`、ほかは `Tensorial`。
+- 実装での補足（フェーズ 5）：`Dual2` は 2 階微分を独立な成分（$`n(n+1)/2`$ 個）で持つ。Ricci テンソルは理論上対称だが、`Symmetric` の印を正しく保つため、値を対称化してから返す（対称化の前の非対称性は TC-U14 で計測した）。
 - 共変微分 $`\nabla_c T`$：テンソル場を `Dual` で評価して $`\partial_c T`$（`ChartBound`）を得て、上付きの枠ごとに $`+\Gamma^{a}{}_{c e} T^{\cdots e \cdots}`$、下付きの枠ごとに $`-\Gamma^{e}{}_{c b} T_{\cdots e \cdots}`$ を足す。足し終えたものを M03 の中で `Tensorial` として返す。テンソル性を付け替えるのはこの関数だけで、`pub(crate)` の関数で行う。
 - 共変微分の結果の枠の並びは、場の枠の並びの後ろに `Down<C>` を 1 つつないだもの。
 

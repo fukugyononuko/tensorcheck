@@ -1,0 +1,23 @@
+error[E0277]: `Frame` is not a coordinate basis; Christoffel symbols and curvature need a coordinate basis
+  --> tests/ui/err19_non_coordinate_basis.rs:20:25
+   |
+20 |     let _ = christoffel(&FrameMetric, &p);
+   |             ----------- ^^^^^^^^^^^^ non-coordinate basis
+   |             |
+   |             required by a bound introduced by this call
+   |
+   = help: the trait `IsCoordinateBasis<Frame>` is not implemented for `NonCoordinateBasis`
+   = note: connection coefficients in non-coordinate bases (e.g. orthonormal frames) are not supported yet
+help: the trait `IsCoordinateBasis<C>` is implemented for `CoordinateBasis`
+  --> src/utility/diagnostics.rs
+   |
+   | impl<C> IsCoordinateBasis<C> for crate::contracts::CoordinateBasis {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `tensorcheck::geometry::christoffel`
+  --> src/manager/geometry.rs
+   |
+   | pub fn christoffel<G: Metric>(
+   |        ----------- required by a bound in this function
+...
+   |     <G::Chart as Chart>::Basis: IsCoordinateBasis<G::Chart>,
+   |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `christoffel`

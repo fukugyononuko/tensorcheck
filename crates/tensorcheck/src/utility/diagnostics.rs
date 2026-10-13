@@ -178,3 +178,12 @@ impl<S> SameSlot<Decoy<S>> for S {}
 )]
 pub trait ComponentDimIs<P> {}
 impl<P> ComponentDimIs<P> for crate::utility::typelevel::True {}
+
+/// ERR-19: connection coefficients and curvature need a coordinate basis.
+#[diagnostic::on_unimplemented(
+    message = "`{C}` is not a coordinate basis; Christoffel symbols and curvature need a coordinate basis",
+    label = "non-coordinate basis",
+    note = "connection coefficients in non-coordinate bases (e.g. orthonormal frames) are not supported yet"
+)]
+pub trait IsCoordinateBasis<C> {}
+impl<C> IsCoordinateBasis<C> for crate::contracts::CoordinateBasis {}

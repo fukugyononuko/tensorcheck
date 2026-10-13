@@ -32,6 +32,19 @@ pub use manager::tensor::{
 pub use utility::linear::LinearError;
 pub use utility::scalar::Scalar;
 
+/// Connection, curvature and covariant derivatives (API-16, API-50 to API-55).
+pub mod geometry {
+    pub use crate::manager::geometry::{
+        Christoffel, Curvature, Einstein, Ricci, RicciScalar, Riemann, TensorField, christoffel,
+        covariant_derivative, curvature, einstein, ricci, ricci_scalar, riemann,
+    };
+}
+
+/// Dual numbers for automatic differentiation (API-17).
+pub mod autodiff {
+    pub use crate::utility::autodiff::{Dual, Dual2};
+}
+
 /// Dimension arithmetic on types (API-07).
 pub mod dim {
     pub use crate::engine::dimension::{Pow, Prod, Quot};
