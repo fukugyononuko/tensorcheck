@@ -3,3 +3,4 @@
 pub mod euclid3;
 pub mod minkowski;
 pub mod plane;
+pub mod sphere2;

@@ -6,10 +6,10 @@
 
 use core::marker::PhantomData;
 
-use crate::access::component::{Extent, SlotExtent};
+use crate::access::component::{Extent, SlotExtent, Slots};
 use crate::utility::diagnostics::CoordOf;
 use crate::utility::scalar::Scalar;
-use crate::utility::typelevel::{Nat, NatEq};
+use crate::utility::typelevel::{Cons, Nat, NatEq, Nil};
 
 /// Marks a tensor: it obeys the tensor transformation law.
 #[derive(Clone, Copy, Debug)]
@@ -168,4 +168,104 @@ pub mod slot {
     #[allow(non_camel_case_types)]
     #[derive(Clone, Copy, Debug)]
     pub struct _3;
+}
+
+// ---------------------------------------------------------------------------
+// Symmetry markers (E04 decides the rules)
+
+/// No symmetry.
+#[derive(Clone, Copy, Debug)]
+pub struct NoSym;
+/// Symmetric in its two indices: `T_ab = T_ba`.
+#[derive(Clone, Copy, Debug)]
+pub struct Symmetric;
+/// Antisymmetric in its two indices: `T_ab = -T_ba`.
+#[derive(Clone, Copy, Debug)]
+pub struct Antisymmetric;
+
+// ---------------------------------------------------------------------------
+// Tensors (M01 and M03 build and combine them)
+
+/// A tensor with dimension `D`, index slots `S`, symmetry `Sym`, tensoriality `K`
+/// and component type `N` (API-01).
+///
+/// Components are stored in the base unit of the unit system. A quantity is a
+/// tensor of rank 0 ([`Quantity`]).
+pub struct Tensor<D, S: Slots, Sym = NoSym, K = Tensorial, N: Scalar = f64> {
+    pub(crate) c: S::Store<N>,
+    pub(crate) _m: PhantomData<(D, Sym, K)>,
+}
+
+/// A rank-0 tensor: a number with a physical dimension (API-02).
+pub type Quantity<D, N = f64> = Tensor<D, Nil, NoSym, Tensorial, N>;
+/// A vector (one upper index) in chart `C` (API-02).
+pub type Vector<D, C, N = f64> = Tensor<D, Cons<Up<C>, Nil>, NoSym, Tensorial, N>;
+/// A covector (one lower index) in chart `C` (API-02).
+pub type Covector<D, C, N = f64> = Tensor<D, Cons<Down<C>, Nil>, NoSym, Tensorial, N>;
+/// A rank-2 tensor with slots `A`, `B` (each `Up<C>` or `Down<C>`).
+pub type Rank2<D, A, B, Sym = NoSym, K = Tensorial, N = f64> =
+    Tensor<D, Cons<A, Cons<B, Nil>>, Sym, K, N>;
+/// A rank-3 tensor with slots `A`, `B`, `C`.
+pub type Rank3<D, A, B, C, Sym = NoSym, K = Tensorial, N = f64> =
+    Tensor<D, Cons<A, Cons<B, Cons<C, Nil>>>, Sym, K, N>;
+/// A rank-4 tensor with slots `A`, `B`, `C`, `E`.
+pub type Rank4<D, A, B, C, E, Sym = NoSym, K = Tensorial, N = f64> =
+    Tensor<D, Cons<A, Cons<B, Cons<C, Cons<E, Nil>>>>, Sym, K, N>;
+
+impl<D, S: Slots, Sym, K, N: Scalar> Clone for Tensor<D, S, Sym, K, N> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<D, S: Slots, Sym, K, N: Scalar> Copy for Tensor<D, S, Sym, K, N> {}
+
+impl<D, S: Slots, Sym, K, N: Scalar> Tensor<D, S, Sym, K, N> {
+    /// Wraps a component store (crate-internal: the store must already be in base units
+    /// and satisfy the symmetry).
+    #[inline(always)]
+    pub(crate) fn from_store(c: S::Store<N>) -> Self {
+        Tensor { c, _m: PhantomData }
+    }
+
+    /// Builds a tensor from a function of the flat (row-major) component index.
+    #[inline(always)]
+    pub(crate) fn from_flat_fn(f: impl FnMut(usize) -> N) -> Self {
+        Self::from_store(S::from_fn(f))
+    }
+
+    /// Component number `flat` in row-major order, in base units.
+    #[inline(always)]
+    pub(crate) fn flat(&self, flat: usize) -> N {
+        S::get(&self.c, flat)
+    }
+
+    /// Number of components.
+    pub const LEN: usize = S::LEN;
+
+    /// Applies `f` to every component.
+    #[inline(always)]
+    pub(crate) fn map(self, mut f: impl FnMut(N) -> N) -> Self {
+        Self::from_flat_fn(|i| f(self.flat(i)))
+    }
+
+    /// The tensor with every component equal to zero.
+    pub fn zero() -> Self {
+        Self::from_flat_fn(|_| N::zero())
+    }
+}
+
+impl<D, S: Slots, N: Scalar> Tensor<D, S, NoSym, Tensorial, N> {
+    /// A tensor from its components in base units, for any scalar type `N`. Use it in
+    /// tensor fields written generically over `N` (EXT-08); prefer
+    /// `from_components` with an explicit unit elsewhere.
+    pub fn from_base_components(c: S::Store<N>) -> Self {
+        Tensor { c, _m: PhantomData }
+    }
+}
+
+impl<D, S: Slots, Sym, K, N: Scalar> Tensor<D, S, Sym, K, N> {
+    /// The components in base units, as nested arrays.
+    pub fn base_components(&self) -> S::Store<N> {
+        self.c
+    }
 }

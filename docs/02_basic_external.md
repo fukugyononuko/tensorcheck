@@ -70,12 +70,12 @@
 
 | ID | 書き方 | 意味 | 対応する操作（2b） |
 | --- | --- | --- | --- |
-| API-50 | `Christoffel<C, N>` | Christoffel 記号の型。`Tensor<Dimensionless, (Up<C>, Down<C>, Down<C>), NoSym, ChartBound, N>` の別名 | — |
-| API-51 | `geometry::christoffel(&metric, &p)` | 点 `p` での $`\Gamma^a{}_{bc}`$ | `christoffel` |
-| API-52 | `geometry::{riemann, ricci, ricci_scalar, einstein}(&metric, &p)` | 点 `p` での $`R^a{}_{bcd}`$、$`R_{ab}`$、$`R`$、$`G_{ab}`$ | `riemann` ほか |
+| API-50 | `geometry::Christoffel<C>` | Christoffel 記号の型。`Rank3<Pow<RefDim, N1>, Up<C>, Down<C>, Down<C>, NoSym, ChartBound>`（全体の次元は $`1/[X]`$） | — |
+| API-51 | `geometry::christoffel(&metric, &p)` | 点 `p` での $`\Gamma^a{}_{bc}`$。計量テンソルが正則でないとき `Err` | `christoffel` |
+| API-52 | `geometry::{riemann, ricci, ricci_scalar, einstein}(&metric, &p)` | 点 `p` での $`R^a{}_{bcd}`$、$`R_{ab}`$、$`R`$、$`G_{ab}`$（型 `Riemann<C>`、`Ricci<C>`、`RicciScalar<G>`、`Einstein<C>`。全体の次元は $`1/[X]^2`$、$`R`$ は $`1/([g][X]^2)`$） | `riemann` ほか |
 | API-53 | `geometry::curvature(&metric, &p)` | 同じ点の $`g`$、$`\partial g`$、$`\partial\partial g`$ を 1 回だけ求め、$`\Gamma`$ と曲率をまとめて返す | `riemann` ほか |
-| API-54 | `geometry::covariant_derivative(&field, &metric, &p)` | 点 `p` での $`\nabla_c T^{a\cdots}{}_{b\cdots}`$。結果は下付きの枠が 1 つ増えたテンソル | `covariant_derivative` |
-| API-55 | `field.at(&p)` | テンソル場を点で評価する（`f64` で） | — |
+| API-54 | `geometry::covariant_derivative(&field, &metric, &p)` | 点 `p` での $`\nabla_c T^{a\cdots}{}_{b\cdots}`$。微分の添字は最後の下付きの枠として足され、全体の次元は $`[T]/[X]`$。場のすべての添字が計量テンソルの座標系にあること | `covariant_derivative` |
+| API-55 | `Tensor::from_base_components(c)`、`t.base_components()` | 基準の単位の成分から、数値の型によらずにテンソルを作る（テンソル場の実装に使う）／成分を基準の単位で取り出す | — |
 
 ### 数値計算（M02）
 
@@ -208,7 +208,7 @@ impl Metric for SphereMetric {
 | EXT-04 | `Chart` | 属する空間、座標の型の並び、各座標の次元、基底の種類（`CoordinateBasis` か `NonCoordinateBasis`。`chart!` マクロの既定は座標基底）、名前 | E02 | VOL-04 |
 | EXT-05 | `ChartTransform` | 変換元と変換先の座標系、点の写し方、Jacobi 行列 $`\partial x'^a / \partial x^b`$。逆は省略できる（省略すると U04 で求める） | E02 | VOL-04 |
 | EXT-06 | `Metric` | 座標系、全体の次元、点での成分 $`g_{ab}(x)`$ を数値の型 `N` によらない形で。逆は省略できる | E03 | VOL-05 |
-| EXT-08 | `TensorField` | 座標系、返すテンソルの型、点での成分を数値の型 `N` によらない形で | M03 | — |
+| EXT-08 | `geometry::TensorField` | 座標系、次元、枠の並び、点での値 `fn at<N: Scalar>(&self, p: &Point<Chart, N>) -> Tensor<Dim, Slots, NoSym, Tensorial, N>` | M03 | — |
 | EXT-07 | 関数（`Fn(T, &Y) -> Y::Per<T>` など） | 右辺、加速度、被積分関数、微分する関数、Jacobi 行列 | M02 | — |
 
 単位・空間・座標系・ラベルの定義は、構造体の定義と trait の実装を毎回書くと長くなるので、それを生成するマクロ（`unit!`、`space!`、`chart!`、`label!`）を用意する。単位系は trait を直接実装する（数行で済むため、マクロは用意しない）。マクロが生成するのは EXT の実装だけで、ライブラリの内部には触れない。
