@@ -1,0 +1,9 @@
+error[E0277]: cannot add tensors with different symmetry
+  --> tests/ui/err13_add_symmetric_and_plain.rs:10:15
+   |
+10 |     let _ = s + t;
+   |               ^ this tensor has a different symmetry
+   |
+   = help: the trait `SameSymmetry<NoSym>` is not implemented for `Symmetric`
+   = note: symmetrize or antisymmetrize one of them first
+   = note: required for `Tensor<Dim<Si, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Nil>>>>>>>>, Cons<Down<Cartesian>, Cons<Down<Cartesian>, Nil>>, Symmetric>` to implement `Add<Tensor<Dim<Si, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Nil>>>>>>>>, Cons<Down<Cartesian>, Cons<Down<Cartesian>, Nil>>>>`

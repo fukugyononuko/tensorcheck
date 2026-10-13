@@ -103,3 +103,19 @@ impl<H: SlotExtent + 'static, Tl: Slots> Slots for Cons<H, Tl> {
 pub fn fill<S: Slots, T: Copy>(v: T) -> S::Store<T> {
     S::from_fn(|_| v)
 }
+
+/// Position of `(i, j)` (any order) in the independent components of a symmetric
+/// `n × n` matrix stored row by row with `i <= j`.
+#[inline(always)]
+pub fn sym_index(i: usize, j: usize, n: usize) -> usize {
+    let (i, j) = if i <= j { (i, j) } else { (j, i) };
+    i * n - i * (i + 1) / 2 + j
+}
+
+/// Position of `(i, j)` with `i < j` in the independent components of an
+/// antisymmetric `n × n` matrix stored row by row (strictly upper triangle).
+#[inline(always)]
+pub fn anti_index(i: usize, j: usize, n: usize) -> usize {
+    debug_assert!(i < j);
+    i * n - i * (i + 1) / 2 + (j - i - 1)
+}

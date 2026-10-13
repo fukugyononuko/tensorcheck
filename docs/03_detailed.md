@@ -235,6 +235,7 @@ impl Label for mu { type Id = /* 12 */; const NAME: &'static str = "mu"; }
 ## 3.7 DD-07 対称性（E04、A01）
 
 - 初期版で対称・反対称を持てるのは、階数 2 で、2 つの枠が同じ（`SameSlot`、ERR-12）テンソルだけとする。計量テンソル、Ricci テンソル、Einstein テンソル、電磁場テンソルがこの形である。階数 3 以上の対称性と、一部の添字だけの対称性は将来（VOL-06）。
+- 実装での補足（フェーズ 4）：`from_independent` は、対称性の種類（`Symmetric`・`Antisymmetric`）ごとに入力の配列の型を決める trait `SymmetryKind` を使って 1 つのメソッドにした。2 つの別の実装にすると、`Rank2::from_independent` と書いたときにコンパイラが候補を決められないため。独立な成分の並べ方（`sym_index`・`anti_index`）は、成分の持ち方の関心ごとなので A01 に置く。
 - 対称・反対称のテンソルも、成分は密な入れ子の配列で持つ（A01、初期）。`from_independent` は独立な成分（対称は上三角と対角の $`n(n+1)/2`$ 個、反対称は上三角の $`n(n-1)/2`$ 個、型は `Space::SymArr`・`Space::AntiArr`）を受け取り、$`T_{ji} = \pm T_{ij}`$ を埋めて置く。
 - `set` を公開しないので、作ったあとで対称性が壊れることはない。演算の結果の対称性は 2b §CMP-E04 の表に従う。
 - `symmetrize`：$`\tfrac{1}{2}(T_{ab} + T_{ba})`$、`antisymmetrize`：$`\tfrac{1}{2}(T_{ab} - T_{ba})`$。
@@ -419,6 +420,7 @@ ERR ごとに専用の trait を 1 つ置き、`#[diagnostic::on_unimplemented]`
 | ERR-16 | `IsTensor` | `Tensorial` |
 | ERR-17 | `SameKind<K2>` | 同じテンソル性 |
 | ERR-19 | `IsCoordinateBasis` | `Basis = CoordinateBasis` |
+| ERR-21 | `ComponentDimIs<P>` | `from_parts` の成分の次元の比較が `True` |
 | ERR-20 | `VarianceIs<V, P>` | 指定した枠の上下が、`raise` なら下、`lower` なら上 |
 
 - 実装での補足（フェーズ 1）：見出しを確実に出すには、次のどちらかが要る。
@@ -445,7 +447,7 @@ pub enum LinearError { Singular }
 | --- | --- |
 | `space!(Spacetime, 4)` | 空の構造体と `Space` の実装（`Arr<T> = [T; 4]`、`SymArr<T> = [T; 10]`、`AntiArr<T> = [T; 6]` など、長さは数字から展開時に計算する） |
 | `chart!(Polar in Plane: r: Length, theta: Dimensionless)` | 座標系の構造体、座標の印の構造体（`R`、`Theta`）、`Chart` の実装（基底は座標基底。`chart!(… ; non_coordinate)` で座標基底でない基底） |
-| `unit_system!(…)` | 単位系の構造体と次元の別名 |
+| `unit!(pub light_year: Length = 9.46e15)` | 単位の構造体、`Unit` の実装、単位の演算（`*`、`/`、`pow`）と `f64 * unit` |
 | `label!(kappa = 40)` | ラベルの構造体と `Label` の実装 |
 
 - マクロは `macro_rules!` で書く（手続き型マクロのための外部クレートに依存しない。NFR-01）。

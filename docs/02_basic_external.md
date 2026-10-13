@@ -50,6 +50,9 @@
 | API-20 | `Quantity::new(9.8, m / s.pow::<2>())`、`9.8 * (m / s.pow::<2>())` | 単位を指定して量を作る | `create` |
 | API-21 | `Tensor::from_components([...], unit)` | 単位を指定してテンソルを作る。成分は行優先の並び | `create` |
 | API-34 | `Vector::from_parts((1.0 * (m / s), 0.25 * (rad / s)))` | 成分ごとに次元が違うとき（座標基底の成分など）は、成分を量の組で渡す。各成分の次元は型で確かめる | `create` |
+| API-35 | `Quantity::of(9.8, m / s.pow::<2>())` | 単位の次元をそのまま使って量を作る（型の注釈が要らない。`9.8 * unit` と同じ） | `create` |
+| API-36 | `metric_tensor(&g, &p)`、`inverse_metric_tensor(&g, &p)` | 計量テンソルとその逆を、点での対称なテンソルとして返す（$`G_{IJ}`$ を式に使うため） | `metric_at` / `inverse_at` |
+| API-37 | `t.without_symmetry()` | 対称性の印を外す（成分は変えない） | — |
 | API-22 | `Tensor::<_, _, Symmetric>::from_independent([...], unit)` | 対称・反対称のテンソルを、独立な成分だけから作る | `create` |
 | API-23 | `q.value_in(km)`、`t.components_in(unit)` | 単位を指定して値を取り出す | `read` |
 | API-24 | `t.at((Theta,))`、`t.at((R, Theta))` | 座標を型で指定して成分を 1 つ取り出す。戻り値は `Quantity` | `component` |
@@ -208,7 +211,7 @@ impl Metric for SphereMetric {
 | EXT-08 | `TensorField` | 座標系、返すテンソルの型、点での成分を数値の型 `N` によらない形で | M03 | — |
 | EXT-07 | 関数（`Fn(T, &Y) -> Y::Per<T>` など） | 右辺、加速度、被積分関数、微分する関数、Jacobi 行列 | M02 | — |
 
-単位系・空間・座標系の定義は、構造体の定義と trait の実装を毎回書くと長くなるので、それを生成するマクロ（`unit_system!`、`space!`、`chart!`）も用意する。マクロが生成するのは EXT の実装だけで、ライブラリの内部には触れない。
+単位・空間・座標系・ラベルの定義は、構造体の定義と trait の実装を毎回書くと長くなるので、それを生成するマクロ（`unit!`、`space!`、`chart!`、`label!`）を用意する。単位系は trait を直接実装する（数行で済むため、マクロは用意しない）。マクロが生成するのは EXT の実装だけで、ライブラリの内部には触れない。
 
 ## 2a.4 外部に提供するインターフェース：コンパイルエラーの文（ERR）
 
@@ -236,6 +239,7 @@ impl Metric for SphereMetric {
 | ERR-18 | 計量テンソル・テンソル場の成分が、数値の型によらない形で書かれていない | （差し替えられない。コンパイラ自身のエラー E0049「型引数の数が trait の宣言と合わない」が出る） | API ドキュメントと EXT-06・EXT-08 の説明に、数値の型によらない形で書く理由と書き方を載せる | コンパイラ |
 | ERR-19 | 座標基底でない座標系で、接続・曲率・共変微分を求める | `` `{C}` is not a coordinate basis; Christoffel symbols and curvature need a coordinate basis `` | `connection coefficients in non-coordinate bases (e.g. orthonormal frames) are not supported yet` | M03 |
 | ERR-20 | `raise` で上付きの添字を、`lower` で下付きの添字を指定した | `` the index at slot `{P}` is already {Self} `` | `` `raise` applies to a lower index and `lower` to an upper index `` | M01 |
+| ERR-21 | `from_parts` の成分の次元が、座標系から決まる次元と違う | `` component `{P}` has the wrong dimension for this vector `` | `` component a of a vector with dimension [V] has dimension [V]·[x^a]/[X] `` | M01 |
 
 - 見出しの文言は実装時に、04 のコンパイル失敗のテスト（TC-F）で実際の出力を確かめて調整する。調整したらこの表も直す。
 - 判定する構成要素が M02 の誤り（ERR-14、ERR-15）は、M02 の公開する関数の型の制約として表す。

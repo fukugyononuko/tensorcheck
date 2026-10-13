@@ -1,6 +1,6 @@
 //! Metric tensors and their inverses (CMP-E03, DD-08).
 
-use crate::access::component::Extent;
+use crate::access::component::{Extent, sym_index};
 use crate::contracts::{Chart, Point};
 use crate::utility::linear::{LinearError, inverse};
 use crate::utility::scalar::Scalar;
@@ -28,14 +28,6 @@ pub trait Metric: 'static {
     ) -> Option<SymComponents<Self::Chart, N>> {
         None
     }
-}
-
-/// Position of `(i, j)` (any order) in the independent components of a symmetric
-/// `n × n` matrix stored row by row with `i <= j`.
-#[inline(always)]
-pub fn sym_index(i: usize, j: usize, n: usize) -> usize {
-    let (i, j) = if i <= j { (i, j) } else { (j, i) };
-    i * n - i * (i + 1) / 2 + j
 }
 
 /// Expands independent components into a full row-major `n × n` matrix.

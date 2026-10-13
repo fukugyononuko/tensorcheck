@@ -158,3 +158,23 @@ impl IsTensor for crate::contracts::Tensorial {}
     note = "`raise` applies to a lower index and `lower` to an upper index"
 )]
 pub trait VarianceIs<V, P> {}
+
+/// ERR-12: symmetric and antisymmetric tensors need two indices of the same kind.
+#[diagnostic::on_unimplemented(
+    message = "only tensors whose indices are all of the same kind can be symmetric or antisymmetric",
+    label = "indices of different kinds",
+    note = "all indices must be in the same space and chart, and all upper or all lower"
+)]
+pub trait SameSlot<S2> {}
+impl<S> SameSlot<S> for S {}
+impl<S> SameSlot<Decoy<S>> for S {}
+
+/// ERR-21: in `from_parts`, each component must have the dimension that the chart
+/// gives it. Implemented only for `True`.
+#[diagnostic::on_unimplemented(
+    message = "component `{P}` has the wrong dimension for this vector",
+    label = "wrong dimension for this component",
+    note = "component a of a vector with dimension [V] has dimension [V]·[x^a]/[X]"
+)]
+pub trait ComponentDimIs<P> {}
+impl<P> ComponentDimIs<P> for crate::utility::typelevel::True {}

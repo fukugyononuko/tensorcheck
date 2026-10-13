@@ -4,7 +4,9 @@ pub mod natural;
 pub mod si;
 
 /// Implements unit arithmetic (`a * b`, `a / b`, `a.pow::<K>()`) and `f64 * unit`
-/// for a unit type.
+/// for a unit type. Used by [`unit!`](crate::unit).
+#[doc(hidden)]
+#[macro_export]
 macro_rules! unit_ops {
     ($t:ident) => {
         impl<Y: $crate::engine::dimension::Unit> core::ops::Mul<Y> for $t {
@@ -33,28 +35,34 @@ macro_rules! unit_ops {
         impl core::ops::Mul<$t> for f64 {
             type Output = $crate::Quantity<<$t as $crate::engine::dimension::Unit>::Dim>;
             fn mul(self, _: $t) -> Self::Output {
-                $crate::Quantity::from_store($crate::engine::dimension::to_base::<$t>(self))
+                $crate::Quantity::of(self, $t)
             }
         }
     };
 }
-pub(crate) use unit_ops;
 
-/// Declares a named unit with a dimension and a factor to the base unit.
+/// Declares a named unit with its dimension and its factor to the base unit
+/// (EXT-02), with unit arithmetic and `f64 * unit`.
+///
+/// ```
+/// use tensorcheck::units::si::Length;
+/// tensorcheck::unit!(/** Light year. */ pub light_year: Length = 9.460_730_472_580_8e15);
+/// let d = 2.0 * light_year;
+/// ```
+#[macro_export]
 macro_rules! unit {
-    ($(#[$doc:meta])* $t:ident : $dim:ty = $factor:expr) => {
+    ($(#[$doc:meta])* $vis:vis $t:ident : $dim:ty = $factor:expr) => {
         $(#[$doc])*
         #[allow(non_camel_case_types)]
         #[derive(Clone, Copy, Debug, Default)]
-        pub struct $t;
+        $vis struct $t;
         impl $crate::engine::dimension::Unit for $t {
             type Dim = $dim;
             const FACTOR: f64 = $factor;
         }
-        $crate::units::unit_ops!($t);
+        $crate::unit_ops!($t);
     };
 }
-pub(crate) use unit;
 
 // Composite units built with `*`, `/` and `pow` support the same operations.
 mod composite {
