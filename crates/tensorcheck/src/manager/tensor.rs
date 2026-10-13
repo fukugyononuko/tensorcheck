@@ -7,7 +7,10 @@ use core::ops::{Add, Div, Mul, Neg, Sub};
 use crate::access::component::Extent;
 use crate::access::component::SlotExtent;
 use crate::access::component::Slots;
+use crate::access::component::{anti_index, sym_index};
+use crate::contracts::slot;
 use crate::engine::dimension::{DimDiv, DimInfo, DimMul, Prod, Quot, Unit, from_base, to_base};
+use crate::engine::dimension::{DimEq, DimPow, Pow};
 use crate::engine::index::{
     AllAbsent, At, Chart, Contract, Contracted, Down, IntoLabels, KindMul, LabelIds, Slot, Space,
     StripLabels, Tensorial, Up, ZipLabels, contract,
@@ -16,12 +19,15 @@ use crate::engine::index::{
     ChartTransform, MAX_RANK, MapChart, Point, SlotAt, SlotVariances, apply_at_slot,
     inverse_jacobian_at, lower, upper,
 };
+use crate::engine::index::{Here, There};
 use crate::engine::metric::{Metric, inverse_at, metric_at};
-use crate::engine::symmetry::NoSym;
+use crate::engine::symmetry::{Antisymmetric, NoSym, Symmetric};
+use crate::utility::diagnostics::{ComponentDimIs, SameSlot};
 use crate::utility::diagnostics::{CoordOf, IsTensor, LabelCount, MetricOn, VarianceIs};
 use crate::utility::diagnostics::{SameDimension, SameKind, SameSlots, SameSymmetry, UnitMatches};
 use crate::utility::linear::LinearError;
 use crate::utility::scalar::Scalar;
+use crate::utility::typelevel::N1;
 use crate::utility::typelevel::{Concat, Cons, Nil};
 
 /// A tensor with dimension `D`, index slots `S`, symmetry `Sym`, tensoriality `K`
@@ -115,6 +121,14 @@ impl<D> Quantity<D> {
     /// The value in `unit` (API-23).
     pub fn value_in<U: Unit + UnitMatches<D>>(self, _unit: U) -> f64 {
         from_base::<U>(self.c)
+    }
+}
+
+impl Quantity<()> {
+    /// Creates a quantity whose dimension is the dimension of `unit` (no type
+    /// annotation needed). Same as `value * unit`.
+    pub fn of<U: Unit>(value: f64, _unit: U) -> Quantity<U::Dim> {
+        Tensor::from_store(to_base::<U>(value))
     }
 }
 
@@ -673,5 +687,146 @@ impl<D, S: Slots, Sym, K> Tensor<D, S, Sym, K, f64> {
             data = apply_at_slot(&data, &ext, slot, if *up { &jac } else { &lower_mat });
         }
         Ok(Tensor::from_flat_fn(|i| data[i]))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Symmetric and antisymmetric rank-2 tensors (API-22, API-33, DD-07)
+
+/// A symmetry kind with independent components ([`Symmetric`] or [`Antisymmetric`]).
+pub trait SymmetryKind {
+    /// The array of independent components for a space with extent `E`.
+    type Independent<E: Extent>;
+    /// Component `(i, j)` of the full `n × n` matrix from the independent ones.
+    fn full<E: Extent>(c: &Self::Independent<E>, i: usize, j: usize) -> f64;
+}
+impl SymmetryKind for Symmetric {
+    type Independent<E: Extent> = E::SymArr<f64>;
+    fn full<E: Extent>(c: &E::SymArr<f64>, i: usize, j: usize) -> f64 {
+        c.as_ref()[sym_index(i, j, E::N)]
+    }
+}
+impl SymmetryKind for Antisymmetric {
+    type Independent<E: Extent> = E::AntiArr<f64>;
+    fn full<E: Extent>(c: &E::AntiArr<f64>, i: usize, j: usize) -> f64 {
+        match i.cmp(&j) {
+            core::cmp::Ordering::Equal => 0.0,
+            core::cmp::Ordering::Less => c.as_ref()[anti_index(i, j, E::N)],
+            core::cmp::Ordering::Greater => -c.as_ref()[anti_index(j, i, E::N)],
+        }
+    }
+}
+
+impl<D, A, B, Sym: SymmetryKind, K> Tensor<D, Cons<A, Cons<B, Nil>>, Sym, K, f64>
+where
+    A: SlotExtent + 'static + SameSlot<B>,
+    B: SlotExtent + 'static,
+{
+    /// Creates a symmetric or antisymmetric tensor from its independent components
+    /// in `unit` (API-22): `T_ab` with `a <= b` (symmetric) or `a < b`
+    /// (antisymmetric), row by row. The rest is filled by the symmetry, so the
+    /// result cannot violate it.
+    pub fn from_independent<U: Unit + UnitMatches<D>>(
+        c: Sym::Independent<A::Ext>,
+        _unit: U,
+    ) -> Self {
+        let n = <A::Ext as Extent>::N;
+        Tensor::from_flat_fn(|f| to_base::<U>(Sym::full::<A::Ext>(&c, f / n, f % n)))
+    }
+}
+
+impl<D, A, B, K, N: Scalar> Tensor<D, Cons<A, Cons<B, Nil>>, NoSym, K, N>
+where
+    A: SlotExtent + 'static + SameSlot<B>,
+    B: SlotExtent + 'static,
+{
+    /// The symmetric part `(T_ab + T_ba)/2` (API-33).
+    pub fn symmetrize(self) -> Tensor<D, Cons<A, Cons<B, Nil>>, Symmetric, K, N> {
+        let n = <A::Ext as Extent>::N;
+        let half = N::from_f64(0.5);
+        Tensor::from_flat_fn(|f| (self.flat(f) + self.flat((f % n) * n + f / n)) * half)
+    }
+    /// The antisymmetric part `(T_ab − T_ba)/2` (API-33).
+    pub fn antisymmetrize(self) -> Tensor<D, Cons<A, Cons<B, Nil>>, Antisymmetric, K, N> {
+        let n = <A::Ext as Extent>::N;
+        let half = N::from_f64(0.5);
+        Tensor::from_flat_fn(|f| (self.flat(f) - self.flat((f % n) * n + f / n)) * half)
+    }
+}
+
+impl<D, S: Slots, Sym, K, N: Scalar> Tensor<D, S, Sym, K, N> {
+    /// Forgets the symmetry marker (the components are unchanged).
+    pub fn without_symmetry(self) -> Tensor<D, S, NoSym, K, N> {
+        Tensor::from_store(self.c)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The metric tensor as a tensor at a point
+
+/// The metric tensor `g_ab` of `g` at `p`, as a symmetric tensor.
+pub fn metric_tensor<G: Metric>(
+    g: &G,
+    p: &Point<G::Chart>,
+) -> Tensor<G::Dim, Cons<Down<G::Chart>, Cons<Down<G::Chart>, Nil>>, Symmetric> {
+    let m = metric_at(g, p);
+    Tensor::from_flat_fn(|f| m[f])
+}
+
+/// The inverse metric tensor `g^ab` of `g` at `p`, as a symmetric tensor of
+/// dimension `1/[g]`. Fails if the metric tensor is singular at `p`.
+pub fn inverse_metric_tensor<G: Metric>(
+    g: &G,
+    p: &Point<G::Chart>,
+) -> Result<
+    Tensor<Pow<G::Dim, N1>, Cons<Up<G::Chart>, Cons<Up<G::Chart>, Nil>>, Symmetric>,
+    LinearError,
+>
+where
+    G::Dim: DimPow<N1>,
+{
+    let m = inverse_at(g, p)?;
+    Ok(Tensor::from_flat_fn(|f| m[f]))
+}
+
+// ---------------------------------------------------------------------------
+// Vectors from per-component quantities (API-34)
+
+/// A tuple of quantities that can be the components of a vector of dimension `D`
+/// in chart `C`.
+pub trait VectorParts<D, C: Chart> {
+    /// Writes the components in base units.
+    fn write(&self, out: &mut [f64]);
+}
+macro_rules! vector_parts {
+    ($($q:ident $i:tt $pos:ty, $p:ty);+) => {
+        impl<D, C: Chart, $($q),+> VectorParts<D, C> for ($(Quantity<$q>,)+)
+        where
+            $(
+                C::CoordDims: At<$pos>,
+                Up<C>: VarianceDim<D, <C::CoordDims as At<$pos>>::Out>,
+                $q: DimEq<<Up<C> as VarianceDim<D, <C::CoordDims as At<$pos>>::Out>>::Out>,
+                <$q as DimEq<<Up<C> as VarianceDim<D, <C::CoordDims as At<$pos>>::Out>>::Out>>::Out: ComponentDimIs<$p>,
+            )+
+        {
+            fn write(&self, out: &mut [f64]) {
+                $( out[$i] = self.$i.c; )+
+            }
+        }
+    };
+}
+vector_parts!(Q0 0 Here, slot::_0);
+vector_parts!(Q0 0 Here, slot::_0; Q1 1 There<Here>, slot::_1);
+vector_parts!(Q0 0 Here, slot::_0; Q1 1 There<Here>, slot::_1; Q2 2 There<There<Here>>, slot::_2);
+vector_parts!(Q0 0 Here, slot::_0; Q1 1 There<Here>, slot::_1; Q2 2 There<There<Here>>, slot::_2; Q3 3 There<There<There<Here>>>, slot::_3);
+
+impl<D, C: Chart> Tensor<D, Cons<Up<C>, Nil>, NoSym, Tensorial, f64> {
+    /// A vector from its components as quantities, each with its own dimension
+    /// (API-34). In polar coordinates a velocity is
+    /// `Vector::from_parts((1.0 * (m / s), 0.25 * (rad / s)))`.
+    pub fn from_parts<P: VectorParts<D, C>>(parts: P) -> Self {
+        let mut buf = [0.0; 16];
+        parts.write(&mut buf);
+        Tensor::from_flat_fn(|i| buf[i])
     }
 }

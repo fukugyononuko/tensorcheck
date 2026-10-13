@@ -1,0 +1,16 @@
+error[E0277]: only tensors whose indices are all of the same kind can be symmetric or antisymmetric
+ --> tests/ui/err12_symmetric_mixed.rs:8:9
+  |
+8 |         Rank2::from_independent([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], one);
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ indices of different kinds
+  |
+  = help: the trait `SameSlot<Down<Cartesian>>` is not implemented for `Up<Cartesian>`
+  = note: all indices must be in the same space and chart, and all upper or all lower
+note: required by a bound in `Tensor::<D, Cons<A, Cons<B, Nil>>, Sym, K>::from_independent`
+ --> src/manager/tensor.rs
+  |
+  |     A: SlotExtent + 'static + SameSlot<B>,
+  |                               ^^^^^^^^^^^ required by this bound in `Tensor::<D, Cons<A, Cons<B, Nil>>, Sym, K>::from_independent`
+...
+  |     pub fn from_independent<U: Unit + UnitMatches<D>>(
+  |            ---------------- required by a bound in this associated function

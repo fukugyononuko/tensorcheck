@@ -4,7 +4,7 @@
 //! amount of substance, luminous intensity.
 
 use crate::engine::dimension::{Dim, UnitSystem};
-use crate::units::unit;
+use crate::unit;
 use crate::utility::typelevel::{Cons, N1, N2, N3, Nil, P1, P2, P3, Z0};
 
 /// The SI unit system.
@@ -61,27 +61,27 @@ pub type Charge = SiDim<Z0, Z0, P1, P1>;
 /// Electric potential.
 pub type Voltage = SiDim<P2, P1, N3, N1>;
 
-unit!(/** Metre. */ m: Length = 1.0);
-unit!(/** Kilometre. */ km: Length = 1.0e3);
-unit!(/** Centimetre. */ cm: Length = 1.0e-2);
-unit!(/** Millimetre. */ mm: Length = 1.0e-3);
-unit!(/** Astronomical unit (IAU 2012, exact). */ au: Length = 1.495_978_707e11);
-unit!(/** Kilogram. */ kg: Mass = 1.0);
-unit!(/** Gram. */ g: Mass = 1.0e-3);
-unit!(/** Second. */ s: Time = 1.0);
-unit!(/** Minute. */ min: Time = 60.0);
-unit!(/** Hour. */ h: Time = 3600.0);
-unit!(/** Ampere. */ A: Current = 1.0);
-unit!(/** Kelvin. */ K: Temperature = 1.0);
-unit!(/** Mole. */ mol: Amount = 1.0);
-unit!(/** Candela. */ cd: Luminosity = 1.0);
-unit!(/** Radian (dimensionless). */ rad: Dimensionless = 1.0);
-unit!(/** The number one (dimensionless). */ one: Dimensionless = 1.0);
-unit!(/** Hertz. */ Hz: Frequency = 1.0);
-unit!(/** Newton. */ N: Force = 1.0);
-unit!(/** Joule. */ J: Energy = 1.0);
-unit!(/** Watt. */ W: Power = 1.0);
-unit!(/** Pascal. */ Pa: Pressure = 1.0);
-unit!(/** Coulomb. */ C: Charge = 1.0);
-unit!(/** Volt. */ V: Voltage = 1.0);
-unit!(/** Electronvolt (exact since the 2019 SI). */ eV: Energy = 1.602_176_634e-19);
+unit!(/** Metre. */ pub m: Length = 1.0);
+unit!(/** Kilometre. */ pub km: Length = 1.0e3);
+unit!(/** Centimetre. */ pub cm: Length = 1.0e-2);
+unit!(/** Millimetre. */ pub mm: Length = 1.0e-3);
+unit!(/** Astronomical unit (IAU 2012, exact). */ pub au: Length = 1.495_978_707e11);
+unit!(/** Kilogram. */ pub kg: Mass = 1.0);
+unit!(/** Gram. */ pub g: Mass = 1.0e-3);
+unit!(/** Second. */ pub s: Time = 1.0);
+unit!(/** Minute. */ pub min: Time = 60.0);
+unit!(/** Hour. */ pub h: Time = 3600.0);
+unit!(/** Ampere. */ pub A: Current = 1.0);
+unit!(/** Kelvin. */ pub K: Temperature = 1.0);
+unit!(/** Mole. */ pub mol: Amount = 1.0);
+unit!(/** Candela. */ pub cd: Luminosity = 1.0);
+unit!(/** Radian (dimensionless). */ pub rad: Dimensionless = 1.0);
+unit!(/** The number one (dimensionless). */ pub one: Dimensionless = 1.0);
+unit!(/** Hertz. */ pub Hz: Frequency = 1.0);
+unit!(/** Newton. */ pub N: Force = 1.0);
+unit!(/** Joule. */ pub J: Energy = 1.0);
+unit!(/** Watt. */ pub W: Power = 1.0);
+unit!(/** Pascal. */ pub Pa: Pressure = 1.0);
+unit!(/** Coulomb. */ pub C: Charge = 1.0);
+unit!(/** Volt. */ pub V: Voltage = 1.0);
+unit!(/** Electronvolt (exact since the 2019 SI). */ pub eV: Energy = 1.602_176_634e-19);

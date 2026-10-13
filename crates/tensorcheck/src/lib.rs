@@ -25,7 +25,10 @@ pub use engine::dimension::{Dim, Pow, Prod, Quot, Unit, UnitSystem};
 pub use engine::index::ChartTransform;
 pub use engine::metric::Metric;
 pub use engine::symmetry::{Antisymmetric, NoSym, Symmetric};
-pub use manager::tensor::{Covector, Labeled, Quantity, Rank2, Rank3, Rank4, Tensor, Vector};
+pub use manager::tensor::{
+    Covector, Labeled, Quantity, Rank2, Rank3, Rank4, Tensor, Vector, inverse_metric_tensor,
+    metric_tensor,
+};
 pub use utility::linear::LinearError;
 pub use utility::scalar::Scalar;
 
