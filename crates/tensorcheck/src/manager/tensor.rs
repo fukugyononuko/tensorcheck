@@ -4,16 +4,23 @@ use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
+use crate::access::component::Extent;
 use crate::access::component::SlotExtent;
 use crate::access::component::Slots;
 use crate::engine::dimension::{DimDiv, DimInfo, DimMul, Prod, Quot, Unit, from_base, to_base};
 use crate::engine::index::{
-    AllAbsent, At, Chart, Contract, Contracted, Down, IntoLabels, KindMul, LabelIds, Slot,
+    AllAbsent, At, Chart, Contract, Contracted, Down, IntoLabels, KindMul, LabelIds, Slot, Space,
     StripLabels, Tensorial, Up, ZipLabels, contract,
 };
+use crate::engine::index::{
+    ChartTransform, MAX_RANK, MapChart, Point, SlotAt, SlotVariances, apply_at_slot,
+    inverse_jacobian_at, lower, upper,
+};
+use crate::engine::metric::{Metric, inverse_at, metric_at};
 use crate::engine::symmetry::NoSym;
-use crate::utility::diagnostics::{CoordOf, LabelCount};
+use crate::utility::diagnostics::{CoordOf, IsTensor, LabelCount, MetricOn, VarianceIs};
 use crate::utility::diagnostics::{SameDimension, SameKind, SameSlots, SameSymmetry, UnitMatches};
+use crate::utility::linear::LinearError;
 use crate::utility::scalar::Scalar;
 use crate::utility::typelevel::{Concat, Cons, Nil};
 
@@ -476,16 +483,25 @@ where
     }
 }
 
-/// Multiplies (upper) or divides (lower) by a coordinate's dimension.
+/// Multiplies (upper) or divides (lower) by `[x^a]/[X]`, the coordinate's dimension
+/// relative to the space's reference dimension.
 pub trait VarianceDim<D, Dx> {
     /// The resulting dimension.
     type Out;
 }
-impl<C, D: DimMul<Dx>, Dx> VarianceDim<D, Dx> for Up<C> {
-    type Out = Prod<D, Dx>;
+impl<C: Chart, D, Dx> VarianceDim<D, Dx> for Up<C>
+where
+    Dx: DimDiv<<C::Space as Space>::RefDim>,
+    D: DimMul<Quot<Dx, <C::Space as Space>::RefDim>>,
+{
+    type Out = Prod<D, Quot<Dx, <C::Space as Space>::RefDim>>;
 }
-impl<C, D: DimDiv<Dx>, Dx> VarianceDim<D, Dx> for Down<C> {
-    type Out = Quot<D, Dx>;
+impl<C: Chart, D, Dx> VarianceDim<D, Dx> for Down<C>
+where
+    Dx: DimDiv<<C::Space as Space>::RefDim>,
+    D: DimDiv<Quot<Dx, <C::Space as Space>::RefDim>>,
+{
+    type Out = Quot<D, Quot<Dx, <C::Space as Space>::RefDim>>;
 }
 
 /// Coordinates passed to `at`: a tuple of coordinate markers.
@@ -519,5 +535,143 @@ impl<D, S: Slots, Sym, K, N: Scalar> Tensor<D, S, Sym, K, N> {
         S: ComponentDim<D, X::List, I>,
     {
         Tensor::from_store(self.flat(<S as ComponentDim<D, X::List, I>>::flat_index()))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Points from quantities (API-10)
+
+/// Coordinates passed to `Point::new`: a tuple of quantities whose dimensions are
+/// the chart's coordinate dimensions, in order.
+pub trait CoordQuantities<C: Chart> {
+    /// Writes the values in base units.
+    fn write(&self, out: &mut [f64]);
+}
+macro_rules! coord_quantities {
+    ($($q:ident $i:tt),+) => {
+        impl<C, $($q),+> CoordQuantities<C> for ($(Quantity<$q>,)+)
+        where
+            C: Chart<CoordDims = coord_quantities!(@list $($q),+)>,
+        {
+            fn write(&self, out: &mut [f64]) {
+                $( out[$i] = self.$i.c; )+
+            }
+        }
+    };
+    (@list $h:ident $(, $t:ident)*) => { Cons<$h, coord_quantities!(@list $($t),*)> };
+    (@list) => { Nil };
+}
+coord_quantities!(Q0 0);
+coord_quantities!(Q0 0, Q1 1);
+coord_quantities!(Q0 0, Q1 1, Q2 2);
+coord_quantities!(Q0 0, Q1 1, Q2 2, Q3 3);
+coord_quantities!(Q0 0, Q1 1, Q2 2, Q3 3, Q4 4);
+
+impl<C: Chart> Point<C> {
+    /// A point from its coordinates as quantities, in the chart's order (API-10).
+    ///
+    /// ```
+    /// use tensorcheck::Point;
+    /// use tensorcheck::spaces::plane::{Polar, Theta};
+    /// use tensorcheck::units::si::{m, rad};
+    /// let p = Point::<Polar>::new((2.0 * m, 0.5 * rad));
+    /// assert_eq!(p.coord(Theta), 0.5);
+    /// ```
+    pub fn new<Q: CoordQuantities<C>>(coords: Q) -> Self {
+        let mut buf = [0.0; 16];
+        coords.write(&mut buf);
+        Point::from_base(C::Space::from_fn(|i| buf[i]))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Raising, lowering and changing charts (API-31, API-32)
+
+impl<D, S: Slots, Sym, K> Tensor<D, S, Sym, K, f64> {
+    fn flat_vec(&self) -> (Vec<f64>, Vec<usize>) {
+        (
+            (0..S::LEN).map(|i| self.flat(i)).collect(),
+            (0..S::RANK).map(S::extent).collect(),
+        )
+    }
+
+    /// Lowers index number `P` with the metric tensor `g` at `p`:
+    /// `T_a = g_ab T^b` (API-31).
+    pub fn lower<P, G: Metric>(
+        self,
+        _slot: P,
+        g: &G,
+        p: &Point<G::Chart>,
+    ) -> Tensor<Prod<D, G::Dim>, <S as SlotAt<P>>::Flipped, NoSym, K>
+    where
+        S: SlotAt<P>,
+        <S as SlotAt<P>>::Flipped: Slots,
+        <<S as SlotAt<P>>::Slot as Slot>::Var: VarianceIs<upper, P>,
+        G::Chart: MetricOn<<<S as SlotAt<P>>::Slot as Slot>::Chart, G>,
+        D: DimMul<G::Dim>,
+    {
+        let gm = metric_at(g, p);
+        let (flat, ext) = self.flat_vec();
+        let out = apply_at_slot(&flat, &ext, <S as SlotAt<P>>::POS, &gm);
+        Tensor::from_flat_fn(|i| out[i])
+    }
+
+    /// Raises index number `P` with the inverse metric tensor at `p`:
+    /// `T^a = g^ab T_b` (API-31). Fails if the metric tensor is singular at `p`.
+    pub fn raise<P, G: Metric>(
+        self,
+        _slot: P,
+        g: &G,
+        p: &Point<G::Chart>,
+    ) -> Result<Tensor<Quot<D, G::Dim>, <S as SlotAt<P>>::Flipped, NoSym, K>, LinearError>
+    where
+        S: SlotAt<P>,
+        <S as SlotAt<P>>::Flipped: Slots,
+        <<S as SlotAt<P>>::Slot as Slot>::Var: VarianceIs<lower, P>,
+        G::Chart: MetricOn<<<S as SlotAt<P>>::Slot as Slot>::Chart, G>,
+        D: DimDiv<G::Dim>,
+    {
+        let ginv = inverse_at(g, p)?;
+        let (flat, ext) = self.flat_vec();
+        let out = apply_at_slot(&flat, &ext, <S as SlotAt<P>>::POS, &ginv);
+        Ok(Tensor::from_flat_fn(|i| out[i]))
+    }
+
+    /// Expresses this tensor at `p` in the target chart of `xf` (API-32). Upper
+    /// indices transform with `∂x'^a/∂x^b`, lower indices with `∂x^b/∂x'^a`. Every
+    /// index must be in the source chart (ERR-10), and only tensors can be
+    /// transformed (ERR-16). Fails if the Jacobian is singular at `p`.
+    pub fn transform<X: ChartTransform>(
+        self,
+        xf: &X,
+        p: &Point<X::From>,
+    ) -> Result<Tensor<D, <S as MapChart<X::From, X::To, X>>::Out, Sym, K>, LinearError>
+    where
+        S: MapChart<X::From, X::To, X> + SlotVariances,
+        <S as MapChart<X::From, X::To, X>>::Out: Slots,
+        K: IsTensor,
+    {
+        let n = <<X::From as Chart>::Space as Extent>::N;
+        let jac = xf.jacobian(p);
+        let mut ups = [false; MAX_RANK];
+        S::write(&mut ups[..S::RANK]);
+        let (mut data, ext) = self.flat_vec();
+        let lower_mat = if ups[..S::RANK].iter().any(|u| !u) {
+            // M[a'][b] = ∂x^b/∂x'^a, the transposed inverse Jacobian.
+            let inv = inverse_jacobian_at(xf, p)?;
+            let mut m = vec![0.0; n * n];
+            for a in 0..n {
+                for b in 0..n {
+                    m[a * n + b] = inv[b * n + a];
+                }
+            }
+            m
+        } else {
+            Vec::new()
+        };
+        for (slot, up) in ups[..S::RANK].iter().enumerate() {
+            data = apply_at_slot(&data, &ext, slot, if *up { &jac } else { &lower_mat });
+        }
+        Ok(Tensor::from_flat_fn(|i| data[i]))
     }
 }

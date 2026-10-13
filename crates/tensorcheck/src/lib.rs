@@ -8,6 +8,7 @@
 #![allow(clippy::type_complexity)]
 
 pub mod access;
+pub mod contracts;
 pub mod engine;
 pub mod labels;
 mod macros;
@@ -16,12 +17,16 @@ pub mod spaces;
 pub mod units;
 pub mod utility;
 
-pub use engine::dimension::{Dim, Pow, Prod, Quot, Unit, UnitSystem};
-pub use engine::index::{
-    Chart, ChartBound, CoordinateBasis, Down, Label, NonCoordinateBasis, Space, Tensorial, Up,
+pub use contracts::{
+    Chart, ChartBound, CoordinateBasis, Down, Label, NonCoordinateBasis, Point, Space, Tensorial,
+    Up, slot,
 };
+pub use engine::dimension::{Dim, Pow, Prod, Quot, Unit, UnitSystem};
+pub use engine::index::ChartTransform;
+pub use engine::metric::Metric;
 pub use engine::symmetry::{Antisymmetric, NoSym, Symmetric};
 pub use manager::tensor::{Covector, Labeled, Quantity, Rank2, Rank3, Rank4, Tensor, Vector};
+pub use utility::linear::LinearError;
 pub use utility::scalar::Scalar;
 
 /// Dimension arithmetic on types (API-07).

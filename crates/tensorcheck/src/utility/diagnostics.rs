@@ -121,3 +121,40 @@ pub trait CoordOf<X, C, I> {
     /// Position of the coordinate in the chart.
     const POS: usize;
 }
+
+/// ERR-09: the metric tensor must be on the chart of the index.
+#[diagnostic::on_unimplemented(
+    message = "metric `{G}` is defined on chart `{Self}`, but the index is in chart `{C2}`",
+    label = "metric and index are in different charts",
+    note = "use a metric tensor of the index's chart, or transform the tensor first"
+)]
+pub trait MetricOn<C2, G> {}
+impl<X, G> MetricOn<X, G> for X {}
+impl<X, G> MetricOn<Decoy<X>, G> for X {}
+
+/// ERR-10: a chart transform applies to tensors in its source chart.
+#[diagnostic::on_unimplemented(
+    message = "transform `{X}` starts from chart `{C1}`, but the tensor is in chart `{Self}`",
+    label = "wrong source chart",
+    note = "every index of the tensor must be in the transform's source chart"
+)]
+pub trait TransformFrom<C1, X> {}
+impl<C, X> TransformFrom<C, X> for C {}
+impl<C, X> TransformFrom<Decoy<C>, X> for C {}
+
+/// ERR-16: only tensors can be transformed to another chart.
+#[diagnostic::on_unimplemented(
+    message = "this is not a tensor and cannot be transformed to another chart",
+    label = "chart-bound quantity",
+    note = "Christoffel symbols and partial derivatives depend on the chart; compute them in the target chart instead"
+)]
+pub trait IsTensor {}
+impl IsTensor for crate::contracts::Tensorial {}
+
+/// ERR-20: `raise` needs a lower index and `lower` needs an upper index.
+#[diagnostic::on_unimplemented(
+    message = "the index at slot `{P}` is already {Self}",
+    label = "nothing to raise or lower",
+    note = "`raise` applies to a lower index and `lower` to an upper index"
+)]
+pub trait VarianceIs<V, P> {}

@@ -186,11 +186,11 @@ flowchart LR
 | FR-06 任意の階数のテンソル | API-01, API-02, API-03, API-21, API-34 | — | ERR-03 |
 | FR-07 縮約 | API-08, API-27, API-28, API-30 | — | ERR-04, ERR-05, ERR-06, ERR-07, ERR-08 |
 | FR-08 足し算・外積・トレース | API-25, API-26, API-29 | — | ERR-01, ERR-03, ERR-13, ERR-17 |
-| FR-09 計量テンソルと上げ下げ | API-09, API-11, API-31 | EXT-06 | ERR-09 |
+| FR-09 計量テンソルと上げ下げ | API-09, API-11, API-31 | EXT-06 | ERR-09, ERR-20 |
 | FR-10 対称性 | API-04, API-22, API-33 | — | ERR-12, ERR-13 |
 | FR-11 座標系の変換 | API-11, API-32 | EXT-05 | ERR-10, ERR-16 |
 | FR-12 成分の取り出し | API-24 | — | ERR-11 |
-| FR-13 エラー文 | — | — | ERR-01〜ERR-19 |
+| FR-13 エラー文 | — | — | ERR-01〜ERR-20 |
 | FR-14 例題 | §2a.2 の使い方の例 | — | — |
 | FR-15 共変微分 | API-16, API-54 | EXT-08 | ERR-17 |
 | FR-16 自動微分の数値の型 | API-17 | EXT-06, EXT-08 | ERR-18 |
@@ -242,11 +242,11 @@ flowchart LR
 | FR-06 任意の階数のテンソル | TC-U03, TC-F03 |
 | FR-07 縮約 | TC-U04, TC-U13, TC-F04, TC-F05, TC-F06, TC-F07, TC-F08 |
 | FR-08 足し算・外積・トレース | TC-U04, TC-F01, TC-F03, TC-F13 |
-| FR-09 計量テンソルと上げ下げ | TC-U07, TC-I02, TC-I03, TC-F09, TC-R05 |
+| FR-09 計量テンソルと上げ下げ | TC-U07, TC-I02, TC-I03, TC-F09, TC-F21, TC-R05 |
 | FR-10 対称性 | TC-U06, TC-F12, TC-F13 |
 | FR-11 座標系の変換 | TC-U08, TC-I04, TC-F10, TC-R04 |
 | FR-12 成分の取り出し | TC-U05, TC-F11 |
-| FR-13 エラー文 | TC-F01〜TC-F18, TC-F20 |
+| FR-13 エラー文 | TC-F01〜TC-F18, TC-F20, TC-F21 |
 | FR-14 例題 | TC-E01〜TC-E07 |
 | FR-15 共変微分 | TC-U12 |
 | FR-16 自動微分の数値の型 | TC-U09, TC-F18 |

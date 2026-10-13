@@ -57,6 +57,7 @@ crates/
 scripts/  check_privacy.py check_workflows.py check_layers.py
 ```
 
+- 層をまたいで共有する型（空間・座標系・枠・ラベル・点・テンソル性の印・枠の位置の印）は `src/contracts.rs` に置く。処理は持たない。Engine どうしが互いを参照せずに同じ型を使うため（The Method で、層の間のデータの契約を別にまとめるのと同じ）。どの層からも使えるが、契約自身は `access/`・`utility/` だけを使う（フェーズ 3 で追加）。
 - 層ごとにディレクトリを分ける。層の外に見せる項目は `pub(crate)`、クレートの外に見せる項目だけを `pub` にする。
 - `scripts/check_layers.py`（NFR-11）は、各ファイルの `use crate::…` と `tensorcheck::internal::…` を読み、01 §1.7 の表に反しないかを検査する。
   - `manager/` は `engine/`・`access/`・`utility/` だけを使う。ほかの `manager/` を使わない。
@@ -150,8 +151,10 @@ pub trait Slots {
 `t.at((Theta,))` は、座標の印 `Theta` が枠の座標系の `Coords` の何番目かを型の計算で求め（ないなら ERR-11）、その番号を平らな番号に、その座標の次元を戻り値の次元に使う。
 
 ```math
-[T^{a_1 \cdots}{}_{b_1 \cdots}] = [T] \prod_i [x^{a_i}] \Big/ \prod_j [x^{b_j}]
+[T^{a_1 \cdots}{}_{b_1 \cdots}] = [T] \prod_i \frac{[x^{a_i}]}{[X]} \Big/ \prod_j \frac{[x^{b_j}]}{[X]}
 ```
+
+$`[X]`$ は空間の基準の次元（`Space::RefDim`）。フェーズ 3 で、$`[X]`$ で割らない形から変えた（01 §1.2）。
 
 ## 3.5 DD-05 テンソルの型と基本の演算（M01）
 
@@ -416,6 +419,7 @@ ERR ごとに専用の trait を 1 つ置き、`#[diagnostic::on_unimplemented]`
 | ERR-16 | `IsTensor` | `Tensorial` |
 | ERR-17 | `SameKind<K2>` | 同じテンソル性 |
 | ERR-19 | `IsCoordinateBasis` | `Basis = CoordinateBasis` |
+| ERR-20 | `VarianceIs<V, P>` | 指定した枠の上下が、`raise` なら下、`lower` なら上 |
 
 - 実装での補足（フェーズ 1）：見出しを確実に出すには、次のどちらかが要る。
   - **おとりの実装**：`impl<D> SameDimension<D> for D` のように実装が 1 つだけだと、コンパイラはそれを使ってもう一方の型を推論してしまい、「型が合わない」（E0308）という別のエラーになる。決して使われない型 `Decoy<T>` への実装を 1 つ足すと、推論が先に決まらず、見出しのとおりのエラーになる。

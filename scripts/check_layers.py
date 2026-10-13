@@ -3,6 +3,7 @@
 - manager/ は engine/・access/・utility/ だけを使う。ほかの manager/ のファイルを使わない。
 - engine/ は access/・utility/ だけを使う。ほかの engine/ のファイルを使わない。
 - access/ は utility/ だけを使う。utility/ は utility/ だけを使う。
+- src/contracts.rs（層をまたいで共有する型）は、どの層からも使える。契約自身は access/・utility/ だけを使う。
 - tensorcheck::internal を使ってよいのは tensorcheck-numerics の src/manager/ だけ。
 - 両方のクレートの lib.rs に #![forbid(unsafe_code)] がある。
 
@@ -39,6 +40,11 @@ def check(root: Path) -> list[str]:
             if "tensorcheck::internal" in text:
                 if not (crate.name == "tensorcheck-numerics" and layer == "manager"):
                     problems.append(f"{path}: tensorcheck::internal は numerics の manager だけが使える")
+            if rel.parts[:2] == ("src", "contracts.rs"):
+                for target, target_module in USE_CRATE.findall(text):
+                    if target not in ("access", "utility"):
+                        problems.append(f"{path}: 契約が {target} を使っている（{target}::{target_module}）")
+                continue
             if layer is None:
                 continue
             for target, target_module in USE_CRATE.findall(text):

@@ -34,7 +34,7 @@
 | API-07 | `tensorcheck::dim::{Prod, Quot, Pow}` | 次元から次元を作る型（例：`Quot<Length, Time>` は速度） | E01 |
 | API-08 | `tensorcheck::labels` | 用意したラベル：`a`〜`h`、`i`〜`n`、`mu`、`nu`、`rho`、`sigma`、`alpha`、`beta`、`I`〜`N`。利用者がラベルを足すマクロ `label!` | E02 |
 | API-09 | `tensorcheck::slot::{_0, _1, _2, _3}` | 上げ下げで、どの枠かを指定する印 | E02 |
-| API-10 | `tensorcheck::Point<C, N = f64>` | 座標系 `C` の点。座標ごとに次元つきの値を持つ | E02 |
+| API-10 | `tensorcheck::Point<C, N = f64>` | 座標系 `C` の点。`Point::new((2.0 * m, 0.5 * rad))` で作り、`p.coord(Theta)` で座標の値（基準の単位）を取り出す | E02 |
 | API-11 | `tensorcheck::spaces` | 用意した空間・座標系・計量テンソル・座標変換：3 次元 Euclid 空間（デカルト、極（2 次元）、円柱、球）、Minkowski 時空（デカルト）、半径を指定する 2 次元球面、それぞれの計量テンソルと、デカルト座標との座標変換 | E02, E03 |
 | API-12 | `tensorcheck::VectorSpace` | 数値解法の状態の契約（U05）。テンソル、点、それらの組（要素が 2〜6 個）が実装する | U05 |
 | API-16 | `tensorcheck::geometry` | 接続・曲率・共変微分（API-50〜API-55） | M03 |
@@ -59,8 +59,8 @@
 | API-28 | `g.idx((a, b)) * v.idx(b)` | ラベルつきの式の積。同じラベルが上下に 1 組あれば縮約する（Einstein の規約） | `contract` |
 | API-29 | `t.idx((a, a))` | 1 つのテンソルの中の縮約（トレース） | `trace` |
 | API-30 | `expr.into_tensor()` | ラベルつきの式をテンソルに戻す。残った枠は、式の中で現れた順に並ぶ | — |
-| API-31 | `t.raise(slot::_0, &metric, &point)`、`t.lower(...)` | 計量テンソルで添字を上げ下げする | `raise` / `lower` |
-| API-32 | `t.transform(&transform, &point)` | 座標系を変換する | `transform` |
+| API-31 | `t.lower(slot::_0, &metric, &point)`、`t.raise(…)` | 計量テンソルで添字を下げる・上げる。`raise` は計量テンソルが正則でないとき `Err(LinearError::Singular)` を返す |  `raise` / `lower` |
+| API-32 | `t.transform(&transform, &point)` | 座標系を変換する。すべての添字が変換元の座標系にあること（混ざった添字の一部だけの変換は将来）。Jacobi 行列が正則でないとき `Err` を返す | `transform` |
 | API-33 | `t.symmetrize()`、`t.antisymmetrize()` | 対称化・反対称化 | `symmetrize` / `antisymmetrize` |
 
 ### 幾何（M03）
@@ -201,7 +201,7 @@ impl Metric for SphereMetric {
 | --- | --- | --- | --- | --- |
 | EXT-01 | `UnitSystem` | 基本次元の数（型レベルの整数）と、次元の名前（ドキュメントとエラー文用） | E01 | VOL-01 |
 | EXT-02 | `Unit` | 属する単位系、次元、基準の単位への換算係数 | E01 | VOL-02 |
-| EXT-03 | `Space` | 次元数 $`n`$（型レベルの整数）、名前 | E02 | VOL-03 |
+| EXT-03 | `Space` | 次元数 $`n`$、座標の基準の次元 $`[X]`$（`RefDim`）、名前。`space!(Name, n, RefDim)` で定義する | E02 | VOL-03 |
 | EXT-04 | `Chart` | 属する空間、座標の型の並び、各座標の次元、基底の種類（`CoordinateBasis` か `NonCoordinateBasis`。`chart!` マクロの既定は座標基底）、名前 | E02 | VOL-04 |
 | EXT-05 | `ChartTransform` | 変換元と変換先の座標系、点の写し方、Jacobi 行列 $`\partial x'^a / \partial x^b`$。逆は省略できる（省略すると U04 で求める） | E02 | VOL-04 |
 | EXT-06 | `Metric` | 座標系、全体の次元、点での成分 $`g_{ab}(x)`$ を数値の型 `N` によらない形で。逆は省略できる | E03 | VOL-05 |
@@ -235,6 +235,7 @@ impl Metric for SphereMetric {
 | ERR-17 | テンソルとテンソルでないものの足し算 | `cannot add a tensor and a chart-bound (non-tensor) quantity` | `use geometry::covariant_derivative to combine partial derivatives and Christoffel symbols` | E02 |
 | ERR-18 | 計量テンソル・テンソル場の成分が、数値の型によらない形で書かれていない | （差し替えられない。コンパイラ自身のエラー E0049「型引数の数が trait の宣言と合わない」が出る） | API ドキュメントと EXT-06・EXT-08 の説明に、数値の型によらない形で書く理由と書き方を載せる | コンパイラ |
 | ERR-19 | 座標基底でない座標系で、接続・曲率・共変微分を求める | `` `{C}` is not a coordinate basis; Christoffel symbols and curvature need a coordinate basis `` | `connection coefficients in non-coordinate bases (e.g. orthonormal frames) are not supported yet` | M03 |
+| ERR-20 | `raise` で上付きの添字を、`lower` で下付きの添字を指定した | `` the index at slot `{P}` is already {Self} `` | `` `raise` applies to a lower index and `lower` to an upper index `` | M01 |
 
 - 見出しの文言は実装時に、04 のコンパイル失敗のテスト（TC-F）で実際の出力を確かめて調整する。調整したらこの表も直す。
 - 判定する構成要素が M02 の誤り（ERR-14、ERR-15）は、M02 の公開する関数の型の制約として表す。

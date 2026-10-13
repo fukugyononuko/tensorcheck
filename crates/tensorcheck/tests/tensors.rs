@@ -23,7 +23,7 @@ fn storage_size_is_components_times_scalar() {
     // TC-U03 / NFR-03.
     assert_eq!(size_of::<Vector<Length, Cartesian>>(), 3 * 8);
     assert_eq!(size_of::<T2<UpC, DnC>>(), 9 * 8);
-    tensorcheck::space!(Five, 5);
+    tensorcheck::space!(Five, 5, Length);
     tensorcheck::chart!(F5 on Five { X1: Length, X2: Length, X3: Length, X4: Length, X5: Length });
     type R4 = Rank4<Dimensionless, Up<F5>, Down<F5>, Down<F5>, Down<F5>>;
     assert_eq!(size_of::<R4>(), 625 * 8);
@@ -124,9 +124,9 @@ fn chained_products() {
 
 #[test]
 fn component_dimensions_in_polar_coordinates() {
-    // TC-U05: V^r has dimension [V][r] = m/s, V^θ has [V][θ] = 1/s.
-    let v: Vector<tensorcheck::Quot<Dimensionless, tensorcheck::units::si::Time>, Polar> =
-        Vector::from_components([1.5, 0.25], one / s);
+    // TC-U05: with reference dimension [X] = m, V^r has [V][r]/[X] = m/s and
+    // V^θ has [V][θ]/[X] = 1/s.
+    let v: Vector<Velocity, Polar> = Vector::from_components([1.5, 0.25], m / s);
     let vr: Quantity<Velocity> = v.at((R,));
     let vt: Quantity<tensorcheck::units::si::Frequency> = v.at((Theta,));
     assert_eq!(vr.value_in(m / s), 1.5);
@@ -154,7 +154,7 @@ fn newtons_second_law_for_vectors() {
 }
 
 // TC-R03 (VOL-03): a three-component field space defined by the user.
-tensorcheck::space!(Fields3, 3);
+tensorcheck::space!(Fields3, 3, Dimensionless);
 tensorcheck::chart!(Phi3 on Fields3 { P1: Dimensionless, P2: Dimensionless, P3: Dimensionless });
 
 #[test]

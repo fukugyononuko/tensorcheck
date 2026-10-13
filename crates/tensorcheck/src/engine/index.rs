@@ -6,6 +6,11 @@
 use core::marker::PhantomData;
 
 use crate::access::component::{Extent, SlotExtent, Slots};
+pub use crate::contracts::Ix;
+pub use crate::contracts::{
+    Chart, ChartBound, CoordinateBasis, Down, Label, NonCoordinateBasis, Point, Slot, Space,
+    Tensorial, Up, lower, slot, upper,
+};
 use crate::utility::diagnostics::{
     AppearsOnce, CoordOf, LabelCount, Opposite, SameChart, SameSpace,
 };
@@ -14,13 +19,6 @@ use crate::utility::typelevel::{Bool, Concat, Cons, False, Nat, NatEq, Nil, True
 
 // ---------------------------------------------------------------------------
 // Tensoriality
-
-/// Marks a tensor: it obeys the tensor transformation law.
-#[derive(Clone, Copy, Debug)]
-pub struct Tensorial;
-/// Marks a chart-bound quantity (not a tensor), such as Christoffel symbols.
-#[derive(Clone, Copy, Debug)]
-pub struct ChartBound;
 
 /// Tensoriality of a product: a tensor only if both factors are tensors.
 pub trait KindMul<K2> {
@@ -40,90 +38,11 @@ impl<K> KindMul<K> for ChartBound {
 // ---------------------------------------------------------------------------
 // Spaces, charts and slots
 
-/// A space that indices range over (EXT-03): spatial, spacetime, field space, ...
-pub trait Space: Extent {
-    /// Name used in documentation and messages.
-    const NAME: &'static str;
-}
-
-/// The basis of a chart is the coordinate basis `∂/∂x^a`.
-#[derive(Clone, Copy, Debug)]
-pub struct CoordinateBasis;
-/// The basis of a chart is not a coordinate basis (orthonormal frame, tetrad).
-#[derive(Clone, Copy, Debug)]
-pub struct NonCoordinateBasis;
-
-/// A chart (coordinate system and basis) on a space (EXT-04).
-pub trait Chart: 'static {
-    /// The space this chart belongs to.
-    type Space: Space;
-    /// The coordinate markers, as a type-level list.
-    type Coords;
-    /// The dimension of each coordinate, as a type-level list.
-    type CoordDims;
-    /// [`CoordinateBasis`] or [`NonCoordinateBasis`].
-    type Basis;
-    /// Name used in documentation and messages.
-    const NAME: &'static str;
-}
-
-/// Variance marker: an upper (contravariant) index.
-#[allow(non_camel_case_types)]
-pub struct upper;
-/// Variance marker: a lower (covariant) index.
-#[allow(non_camel_case_types)]
-pub struct lower;
 impl<L> Opposite<lower, L> for upper {}
 impl<L> Opposite<upper, L> for lower {}
 
-/// An upper index in chart `C`.
-pub struct Up<C>(PhantomData<C>);
-/// A lower index in chart `C`.
-pub struct Down<C>(PhantomData<C>);
-
-/// An index slot: chart and variance.
-pub trait Slot: 'static {
-    /// The chart.
-    type Chart: Chart;
-    /// [`upper`] or [`lower`].
-    type Var;
-    /// Whether the index is upper.
-    const UP: bool;
-    /// The same slot with the opposite variance.
-    type Flip: Slot<Chart = Self::Chart>;
-}
-impl<C: Chart> Slot for Up<C> {
-    type Chart = C;
-    type Var = upper;
-    const UP: bool = true;
-    type Flip = Down<C>;
-}
-impl<C: Chart> Slot for Down<C> {
-    type Chart = C;
-    type Var = lower;
-    const UP: bool = false;
-    type Flip = Up<C>;
-}
-impl<C: Chart> SlotExtent for Up<C> {
-    type Ext = C::Space;
-}
-impl<C: Chart> SlotExtent for Down<C> {
-    type Ext = C::Space;
-}
-
 // ---------------------------------------------------------------------------
 // Labels
-
-/// An index label such as `a` or `mu` (API-08). Labels are compared by `Id`.
-pub trait Label: Copy + 'static {
-    /// The label's number (a type-level natural). Distinct labels need distinct numbers.
-    type Id: Nat + NatEq<Self::Id>;
-    /// The label's name.
-    const NAME: &'static str;
-}
-
-/// A slot `Sl` carrying label `L`.
-pub struct Ix<L, Sl>(PhantomData<(L, Sl)>);
 
 /// Labels passed to `idx`: a single label or a tuple of labels.
 pub trait IntoLabels {
@@ -461,3 +380,129 @@ impl<H, T> At<Here> for Cons<H, T> {
 impl<H, T: At<I>, I> At<There<I>> for Cons<H, T> {
     type Out = <T as At<I>>::Out;
 }
+
+// ---------------------------------------------------------------------------
+// Points and chart transforms
+
+/// A change of chart on one space (EXT-05).
+pub trait ChartTransform: 'static {
+    /// Source chart.
+    type From: Chart;
+    /// Target chart (on the same space).
+    type To: Chart<Space = <Self::From as Chart>::Space>;
+    /// The coordinates of `p` in the target chart.
+    fn map<N: Scalar>(&self, p: &Point<Self::From, N>) -> Point<Self::To, N>;
+    /// The Jacobian `∂x'^a/∂x^b` at `p`, row-major (`a` is the row), in base units.
+    fn jacobian<N: Scalar>(&self, p: &Point<Self::From, N>) -> Vec<N>;
+    /// The inverse Jacobian `∂x^b/∂x'^a` at `p`, row-major (`b` is the row), if known
+    /// in closed form.
+    fn inverse_jacobian<N: Scalar>(&self, _p: &Point<Self::From, N>) -> Option<Vec<N>> {
+        None
+    }
+}
+
+/// The inverse Jacobian `∂x^b/∂x'^a` at `p`: the closed form if given, otherwise
+/// the numerical inverse (U04).
+pub fn inverse_jacobian_at<X: ChartTransform, N: Scalar>(
+    xf: &X,
+    p: &Point<X::From, N>,
+) -> Result<Vec<N>, crate::utility::linear::LinearError> {
+    if let Some(j) = xf.inverse_jacobian(p) {
+        return Ok(j);
+    }
+    let n = <<X::From as Chart>::Space as Extent>::N;
+    let j = xf.jacobian(p);
+    let mut inv = vec![N::zero(); n * n];
+    crate::utility::linear::inverse(&j, n, &mut inv)?;
+    Ok(inv)
+}
+
+/// Applies the matrix `mat` (row-major, `n × n`) to slot number `slot` of a flat
+/// component array: `out[.., i, ..] = Σ_k mat[i][k] · in[.., k, ..]`.
+pub fn apply_at_slot<N: Scalar>(data: &[N], extents: &[usize], slot: usize, mat: &[N]) -> Vec<N> {
+    let n = extents[slot];
+    let inner: usize = extents[slot + 1..].iter().product();
+    let outer: usize = extents[..slot].iter().product();
+    let mut out = vec![N::zero(); data.len()];
+    for o in 0..outer {
+        for i in 0..n {
+            for r in 0..inner {
+                let mut acc = N::zero();
+                for k in 0..n {
+                    acc = acc + mat[i * n + k] * data[(o * n + k) * inner + r];
+                }
+                out[(o * n + i) * inner + r] = acc;
+            }
+        }
+    }
+    out
+}
+
+/// Type-level access to slot number `P` of a slot list, and replacement of it.
+pub trait SlotAt<P> {
+    /// The slot at `P`.
+    type Slot: Slot;
+    /// The list with the slot at `P` flipped (upper ↔ lower).
+    type Flipped;
+    /// The position as a number.
+    const POS: usize;
+}
+impl<H: Slot, T> SlotAt<slot::_0> for Cons<H, T> {
+    type Slot = H;
+    type Flipped = Cons<H::Flip, T>;
+    const POS: usize = 0;
+}
+impl<H, T: SlotAt<slot::_0>> SlotAt<slot::_1> for Cons<H, T> {
+    type Slot = <T as SlotAt<slot::_0>>::Slot;
+    type Flipped = Cons<H, <T as SlotAt<slot::_0>>::Flipped>;
+    const POS: usize = 1;
+}
+impl<H, T: SlotAt<slot::_1>> SlotAt<slot::_2> for Cons<H, T> {
+    type Slot = <T as SlotAt<slot::_1>>::Slot;
+    type Flipped = Cons<H, <T as SlotAt<slot::_1>>::Flipped>;
+    const POS: usize = 2;
+}
+impl<H, T: SlotAt<slot::_2>> SlotAt<slot::_3> for Cons<H, T> {
+    type Slot = <T as SlotAt<slot::_2>>::Slot;
+    type Flipped = Cons<H, <T as SlotAt<slot::_2>>::Flipped>;
+    const POS: usize = 3;
+}
+
+/// Replaces the chart of every slot by `To` (all slots must be in `From`, ERR-10).
+pub trait MapChart<From, To, X> {
+    /// The slots in the target chart.
+    type Out;
+}
+impl<From, To, X> MapChart<From, To, X> for Nil {
+    type Out = Nil;
+}
+impl<From, To, X, C, T: MapChart<From, To, X>> MapChart<From, To, X> for Cons<Up<C>, T>
+where
+    C: crate::utility::diagnostics::TransformFrom<From, X>,
+{
+    type Out = Cons<Up<To>, <T as MapChart<From, To, X>>::Out>;
+}
+impl<From, To, X, C, T: MapChart<From, To, X>> MapChart<From, To, X> for Cons<Down<C>, T>
+where
+    C: crate::utility::diagnostics::TransformFrom<From, X>,
+{
+    type Out = Cons<Down<To>, <T as MapChart<From, To, X>>::Out>;
+}
+
+/// Run-time variance of each slot (`true` = upper).
+pub trait SlotVariances {
+    /// Writes the variances into `out`.
+    fn write(out: &mut [bool]);
+}
+impl SlotVariances for Nil {
+    fn write(_: &mut [bool]) {}
+}
+impl<H: Slot, T: SlotVariances> SlotVariances for Cons<H, T> {
+    fn write(out: &mut [bool]) {
+        out[0] = H::UP;
+        T::write(&mut out[1..]);
+    }
+}
+
+impl<P> crate::utility::diagnostics::VarianceIs<lower, P> for lower {}
+impl<P> crate::utility::diagnostics::VarianceIs<upper, P> for upper {}
