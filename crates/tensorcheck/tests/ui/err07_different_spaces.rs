@@ -4,7 +4,7 @@ use tensorcheck::spaces::minkowski::Inertial;
 use tensorcheck::units::si::{Dimensionless, Length, m, one};
 use tensorcheck::{Covector, Vector};
 
-tensorcheck::space!(Fields, 2);
+tensorcheck::space!(Fields, 2, Dimensionless);
 tensorcheck::chart!(Phi on Fields { P1: Dimensionless, P2: Dimensionless });
 
 fn main() {

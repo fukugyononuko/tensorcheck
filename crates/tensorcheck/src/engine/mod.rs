@@ -2,4 +2,5 @@
 
 pub mod dimension;
 pub mod index;
+pub mod metric;
 pub mod symmetry;

@@ -1,0 +1,53 @@
+error[E0277]: transform `PolarToCartesian2` starts from chart `Polar`, but the tensor is in chart `Cartesian2`
+ --> tests/ui/err10_transform_source.rs:9:25
+  |
+9 |     let _ = v.transform(&PolarToCartesian2, &p);
+  |               --------- ^^^^^^^^^^^^^^^^^^ wrong source chart
+  |               |
+  |               required by a bound introduced by this call
+  |
+  = help: the trait `TransformFrom<Polar, PolarToCartesian2>` is not implemented for `Cartesian2`
+  = note: every index of the tensor must be in the transform's source chart
+help: the following other types implement trait `MapChart<From, To, X>`
+ --> src/engine/index.rs
+  |
+  | / impl<From, To, X, C, T: MapChart<From, To, X>> MapChart<From, To, X> for Cons<Up<C>, T>
+  | | where
+  | |     C: crate::utility::diagnostics::TransformFrom<From, X>,
+  | |___________________________________________________________^ `Cons<Up<C>, T>`
+...
+  | / impl<From, To, X, C, T: MapChart<From, To, X>> MapChart<From, To, X> for Cons<Down<C>, T>
+  | | where
+  | |     C: crate::utility::diagnostics::TransformFrom<From, X>,
+  | |___________________________________________________________^ `Cons<Down<C>, T>`
+  = note: required for `Cons<Up<Cartesian2>, Nil>` to implement `MapChart<Polar, Cartesian2, PolarToCartesian2>`
+note: required by a bound in `Tensor::<D, S, Sym, K>::transform`
+ --> src/manager/tensor.rs
+  |
+  |     pub fn transform<X: ChartTransform>(
+  |            --------- required by a bound in this associated function
+...
+  |         S: MapChart<X::From, X::To, X> + SlotVariances,
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `Tensor::<D, S, Sym, K>::transform`
+
+error[E0277]: transform `PolarToCartesian2` starts from chart `Polar`, but the tensor is in chart `Cartesian2`
+ --> tests/ui/err10_transform_source.rs:9:13
+  |
+9 |     let _ = v.transform(&PolarToCartesian2, &p);
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ wrong source chart
+  |
+  = help: the trait `TransformFrom<Polar, PolarToCartesian2>` is not implemented for `Cartesian2`
+  = note: every index of the tensor must be in the transform's source chart
+help: the following other types implement trait `MapChart<From, To, X>`
+ --> src/engine/index.rs
+  |
+  | / impl<From, To, X, C, T: MapChart<From, To, X>> MapChart<From, To, X> for Cons<Up<C>, T>
+  | | where
+  | |     C: crate::utility::diagnostics::TransformFrom<From, X>,
+  | |___________________________________________________________^ `Cons<Up<C>, T>`
+...
+  | / impl<From, To, X, C, T: MapChart<From, To, X>> MapChart<From, To, X> for Cons<Down<C>, T>
+  | | where
+  | |     C: crate::utility::diagnostics::TransformFrom<From, X>,
+  | |___________________________________________________________^ `Cons<Down<C>, T>`
+  = note: required for `Cons<Up<Cartesian2>, Nil>` to implement `MapChart<Polar, Cartesian2, PolarToCartesian2>`

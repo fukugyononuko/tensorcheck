@@ -55,6 +55,8 @@ pub trait Scalar:
     fn acos(self) -> Self;
     /// Arctangent.
     fn atan(self) -> Self;
+    /// Four-quadrant arctangent of `self / x`.
+    fn atan2(self, x: Self) -> Self;
     /// Integer power.
     fn powi(self, k: i32) -> Self;
     /// Real power.
@@ -109,6 +111,9 @@ impl Scalar for f64 {
     }
     fn atan(self) -> Self {
         f64::atan(self)
+    }
+    fn atan2(self, x: Self) -> Self {
+        f64::atan2(self, x)
     }
     fn powi(self, k: i32) -> Self {
         f64::powi(self, k)

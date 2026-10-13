@@ -1,13 +1,15 @@
 //! Macros that define spaces, charts and labels (DD-18).
 
-/// Defines a space with `n` dimensions (EXT-03).
+/// Defines a space with `n` dimensions and the reference dimension of its
+/// coordinates (EXT-03).
 ///
 /// ```
-/// tensorcheck::space!(pub FieldSpace, 2);
+/// use tensorcheck::units::si::Dimensionless;
+/// tensorcheck::space!(pub FieldSpace, 2, Dimensionless);
 /// ```
 #[macro_export]
 macro_rules! space {
-    ($(#[$m:meta])* $vis:vis $name:ident, $n:literal) => {
+    ($(#[$m:meta])* $vis:vis $name:ident, $n:literal, $refdim:ty) => {
         $(#[$m])*
         #[derive(Clone, Copy, Debug)]
         $vis struct $name;
@@ -27,6 +29,7 @@ macro_rules! space {
             }
         }
         impl $crate::engine::index::Space for $name {
+            type RefDim = $refdim;
             const NAME: &'static str = stringify!($name);
         }
     };
@@ -36,7 +39,7 @@ macro_rules! space {
 ///
 /// ```
 /// use tensorcheck::units::si::{Dimensionless, Length};
-/// tensorcheck::space!(pub Plane, 2);
+/// tensorcheck::space!(pub Plane, 2, Length);
 /// tensorcheck::chart!(pub Polar on Plane { R: Length, Theta: Dimensionless });
 /// ```
 ///
