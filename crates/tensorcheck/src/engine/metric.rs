@@ -64,3 +64,32 @@ pub fn inverse_at<G: Metric, N: Scalar>(
     inverse(&gm, n, &mut full)?;
     Ok(full)
 }
+
+/// Writes the full matrix `g_ab` at `p` into `out` (length `n²`), without allocating.
+pub fn metric_into<G: Metric, N: Scalar>(g: &G, p: &Point<G::Chart, N>, out: &mut [N]) {
+    let n = <<G::Chart as Chart>::Space as Extent>::N;
+    let sym = g.components(p);
+    sym_to_full(sym.as_ref(), n, out);
+}
+
+/// Writes the full matrix `g^ab` at `p` into `out` (length `n²`), without allocating
+/// for `n <= 4` (closed-form inverse).
+pub fn inverse_into<G: Metric, N: Scalar>(
+    g: &G,
+    p: &Point<G::Chart, N>,
+    out: &mut [N],
+) -> Result<(), LinearError> {
+    let n = <<G::Chart as Chart>::Space as Extent>::N;
+    if let Some(sym) = g.inverse(p) {
+        sym_to_full(sym.as_ref(), n, out);
+        return Ok(());
+    }
+    let mut gm = [N::zero(); 64];
+    if n * n <= 64 {
+        metric_into(g, p, &mut gm[..n * n]);
+        inverse(&gm[..n * n], n, out)
+    } else {
+        let full = metric_at(g, p);
+        inverse(&full, n, out)
+    }
+}

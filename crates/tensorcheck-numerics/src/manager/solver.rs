@@ -7,7 +7,7 @@ use core::ops::Range;
 use tensorcheck::{Quantity, TimesDim, VectorSpace};
 
 use crate::engine::error_control::{judge, max_norm, next_step, pick_interval, rms_norm};
-use crate::engine::ode_step::{Rhs, RosenbrockWork, Work, dopri5_step, rk4, rodas_step};
+use crate::engine::ode_step::{RosenbrockWork, Work, dopri5_step, rk4, rodas_step};
 use crate::engine::quadrature::{gauss_kronrod15, gauss_legendre, romberg, simpson, trapezoid};
 use crate::ode::{Solution, SolveError, Stats};
 use crate::quad::{Integral, QuadError};
@@ -145,20 +145,21 @@ pub enum OdeKind {
     Rodas,
 }
 
-pub(crate) fn solve_ivp<T, Y, R, F, A>(
+pub(crate) fn solve_ivp<T, Y, R, F, A, O>(
     mut f: F,
     span: Range<Quantity<T>>,
     y0: Y,
     kind: OdeKind,
     rtol: f64,
     atol: &A,
-    on_step: &mut dyn FnMut(Quantity<T>, &Y),
+    on_step: &mut O,
 ) -> Result<Solution<T, Y>, SolveError<T>>
 where
     F: FnMut(Quantity<T>, &Y) -> R,
     Y: VectorSpace,
     R: VectorSpace,
     A: VectorSpace,
+    O: FnMut(Quantity<T>, &Y) + ?Sized,
 {
     let n = Y::LEN;
     let (t0, t1) = (span.start.base_value(), span.end.base_value());
@@ -323,8 +324,8 @@ where
 
 /// Hairer's initial step-size estimate (DD-13): two right-hand-side evaluations.
 #[allow(clippy::too_many_arguments)]
-fn initial_step(
-    rhs: &mut Rhs,
+fn initial_step<G: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
+    rhs: &mut G,
     t: f64,
     y: &[f64],
     f0: &[f64],

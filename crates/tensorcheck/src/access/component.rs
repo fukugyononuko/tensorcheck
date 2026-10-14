@@ -7,7 +7,8 @@
 
 use crate::utility::typelevel::{Cons, Nil};
 
-pub use crate::utility::extent::{Extent, anti_index, sym_index};
+use crate::utility::extent::prepend;
+pub use crate::utility::extent::{Extent, MAX_RANK, anti_index, sym_index};
 
 /// An index slot knows the extent of the space it belongs to.
 pub trait SlotExtent {
@@ -31,6 +32,12 @@ pub trait Slots: 'static {
     fn from_fn<T: Copy>(f: impl FnMut(usize) -> T) -> Self::Store<T>;
     /// The extent `n` of slot number `slot`.
     fn extent(slot: usize) -> usize;
+    /// The extents of all slots (padded with zeros), as a constant.
+    const EXTENTS: [usize; MAX_RANK];
+    /// The components as one flat row-major slice.
+    fn flat<T: Copy>(s: &Self::Store<T>) -> &[T];
+    /// A slice of stores as one flat slice.
+    fn flat_many<T: Copy>(xs: &[Self::Store<T>]) -> &[T];
 }
 
 impl Slots for Nil {
@@ -51,6 +58,15 @@ impl Slots for Nil {
     }
     fn extent(_: usize) -> usize {
         panic!("a rank-0 tensor has no slots")
+    }
+    const EXTENTS: [usize; MAX_RANK] = [0; MAX_RANK];
+    #[inline(always)]
+    fn flat<T: Copy>(s: &T) -> &[T] {
+        core::slice::from_ref(s)
+    }
+    #[inline(always)]
+    fn flat_many<T: Copy>(xs: &[T]) -> &[T] {
+        xs
     }
 }
 
@@ -76,6 +92,15 @@ impl<H: SlotExtent + 'static, Tl: Slots> Slots for Cons<H, Tl> {
         } else {
             Tl::extent(slot - 1)
         }
+    }
+    const EXTENTS: [usize; MAX_RANK] = prepend(<H::Ext as Extent>::N, Tl::EXTENTS);
+    #[inline(always)]
+    fn flat<T: Copy>(s: &Self::Store<T>) -> &[T] {
+        Tl::flat_many(s.as_ref())
+    }
+    #[inline(always)]
+    fn flat_many<T: Copy>(xs: &[Self::Store<T>]) -> &[T] {
+        Tl::flat_many(<H::Ext as Extent>::flatten(xs))
     }
 }
 

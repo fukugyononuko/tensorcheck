@@ -236,7 +236,7 @@ impl<D, S: Slots, Sym, K, N: Scalar> Tensor<D, S, Sym, K, N> {
     /// Component number `flat` in row-major order, in base units.
     #[inline(always)]
     pub(crate) fn flat(&self, flat: usize) -> N {
-        S::get(&self.c, flat)
+        S::flat(&self.c)[flat]
     }
 
     /// Number of components.
