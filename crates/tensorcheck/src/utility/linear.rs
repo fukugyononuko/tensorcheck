@@ -145,12 +145,26 @@ fn inverse4<N: Scalar>(a: &[N], out: &mut [N]) -> Result<(), LinearError> {
     Ok(())
 }
 
-/// LU decomposition with partial pivoting, in place. Returns the row permutation
-/// and the sign of the permutation.
+/// LU decomposition with partial pivoting, in place, rejecting matrices that are
+/// singular to working precision (Hadamard ratio below `n ε`, DD-08). Returns the
+/// sign of the permutation.
 pub fn lu_decompose<N: Scalar>(
     lu: &mut [N],
     n: usize,
     perm: &mut [usize],
+) -> Result<f64, LinearError> {
+    lu_decompose_with(lu, n, perm, true)
+}
+
+/// LU decomposition with partial pivoting. With `check_conditioning = false` only an
+/// exactly zero or non-finite pivot is an error: the stiff solver's matrix
+/// `I/(hγ) − J` becomes ill-conditioned for large steps when `J` has a zero
+/// eigenvalue (a conserved quantity), yet the solves remain accurate enough there.
+pub fn lu_decompose_with<N: Scalar>(
+    lu: &mut [N],
+    n: usize,
+    perm: &mut [usize],
+    check_conditioning: bool,
 ) -> Result<f64, LinearError> {
     let original: Vec<N> = lu.to_vec();
     for (i, p) in perm.iter_mut().enumerate().take(n) {
@@ -182,7 +196,7 @@ pub fn lu_decompose<N: Scalar>(
         }
     }
     let det: f64 = sign * (0..n).map(|i| lu[i * n + i].re()).product::<f64>();
-    if nearly_singular(&original, n, det) {
+    if check_conditioning && nearly_singular(&original, n, det) {
         return Err(LinearError::Singular);
     }
     Ok(sign)

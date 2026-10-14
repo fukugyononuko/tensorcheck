@@ -27,7 +27,7 @@ flowchart LR
 | BR-03 誤りの内容がわかる | FR-03, FR-13, FR-14 | NFR-04, NFR-05, NFR-06, NFR-07, NFR-08 |
 | BR-04 書き換えずに対応できる | FR-02, FR-03, FR-04, FR-05, FR-09, FR-11, FR-16, FR-25, FR-28 | NFR-01, NFR-10, NFR-11 |
 | BR-05 遅くしない | FR-17 | NFR-01, NFR-02, NFR-03, NFR-12 |
-| BR-06 数値計算でも検査を保つ | FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-29 | NFR-09 |
+| BR-06 数値計算でも検査を保つ | FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-29, FR-30 | NFR-09 |
 | BR-07 個人情報を含めない | — | NFR-13, NFR-14 |
 
 ## T.2 機能要件 → コアユースケース
@@ -63,6 +63,7 @@ flowchart LR
 | FR-27 曲率 | UC-09 | 初期 |
 | FR-28 ほかの数値型 | — | 将来 |
 | FR-29 シンプレクティック法 | — | 将来 |
+| FR-30 利用者が与える Jacobi 行列 | — | 将来 |
 
 ## T.3 変動性 → 構成要素
 
@@ -116,6 +117,7 @@ flowchart LR
 | FR-27 曲率 | CMP-M03, CMP-E02, CMP-E03, CMP-E04, CMP-E08, CMP-E09 |
 | FR-28 ほかの数値型 | CMP-U02（将来） |
 | FR-29 シンプレクティック法 | CMP-E05（将来） |
+| FR-30 利用者が与える Jacobi 行列 | CMP-M02, CMP-E05（将来） |
 | NFR-01 stable・std・依存なし | すべて（01 §1.8） |
 | NFR-03 型の情報は実行時の大きさを持たない | CMP-U01, CMP-A01 |
 | NFR-05 エラー文は見出しでわかる | CMP-U03 |
@@ -203,7 +205,7 @@ flowchart LR
 | FR-26 Christoffel 記号 | API-16, API-50, API-51, API-53 | EXT-06 | ERR-16, ERR-17, ERR-19 |
 | FR-27 曲率 | API-16, API-52, API-53 | EXT-06 | — |
 
-将来の FR（FR-17、FR-23、FR-24、FR-28、FR-29）は、外部インターフェースをまだ持たない。API-41 は廃止。
+将来の FR（FR-17、FR-23、FR-24、FR-28、FR-29、FR-30）は、外部インターフェースをまだ持たない。API-41 は廃止。
 
 ## T.10 詳細設計 → 構成要素・要件
 

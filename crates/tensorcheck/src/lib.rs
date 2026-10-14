@@ -10,6 +10,8 @@
 pub mod access;
 pub mod contracts;
 pub mod engine;
+#[doc(hidden)]
+pub mod internal;
 pub mod labels;
 mod macros;
 pub mod manager;

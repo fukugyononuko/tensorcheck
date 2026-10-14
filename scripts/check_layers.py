@@ -4,7 +4,7 @@
 - engine/ は access/・utility/ だけを使う。ほかの engine/ のファイルを使わない。
 - access/ は utility/ だけを使う。utility/ は utility/ だけを使う。
 - src/contracts.rs（層をまたいで共有する型）は、どの層からも使える。契約自身は access/・utility/ だけを使う。
-- tensorcheck::internal を使ってよいのは tensorcheck-numerics の src/manager/ だけ。
+- tensorcheck::internal::engine（E08）を使ってよいのは tensorcheck-numerics の src/manager/ だけ。tensorcheck::internal::utility（U04）は numerics のどの層からも使える。examples/ と tests/ は使わない。
 - 両方のクレートの lib.rs に #![forbid(unsafe_code)] がある。
 
 引数にディレクトリを渡すと、そこを crates/ の代わりに検査する（検査自体のテスト用）。
@@ -37,9 +37,14 @@ def check(root: Path) -> list[str]:
             parts = rel.parts
             layer = parts[1] if len(parts) > 2 and parts[0] == "src" and parts[1] in LAYERS else None
             module = Path(parts[-1]).stem if layer else None
-            if "tensorcheck::internal" in text:
-                if not (crate.name == "tensorcheck-numerics" and layer == "manager"):
-                    problems.append(f"{path}: tensorcheck::internal は numerics の manager だけが使える")
+            for kind in re.findall(r"tensorcheck::internal::(\w+)", text):
+                in_numerics = crate.name == "tensorcheck-numerics" and parts[0] == "src"
+                if not in_numerics:
+                    problems.append(f"{path}: tensorcheck::internal は numerics のソースだけが使える")
+                elif kind == "engine" and layer != "manager":
+                    problems.append(f"{path}: tensorcheck::internal::engine は numerics の manager だけが使える")
+                elif kind not in ("engine", "utility"):
+                    problems.append(f"{path}: tensorcheck::internal::{kind} は存在しない区分")
             if rel.parts[:2] == ("src", "contracts.rs"):
                 for target, target_module in USE_CRATE.findall(text):
                     if target not in ("access", "utility"):

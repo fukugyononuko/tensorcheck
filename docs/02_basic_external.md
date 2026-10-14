@@ -83,14 +83,14 @@
 | --- | --- | --- |
 | API-40 | `ode::solve_ivp(f, t0..t1, y0, method, tol)` | 1 階の常微分方程式 $`dy/dt = f(t, y)`$ を解く。`f` の戻り値の型は `<Y as VectorSpace>::Per<T>`（$`y`$ ÷ $`[t]`$） |
 | API-41 | （廃止）`ode::solve_second_order` | 2 階の方程式は、状態を $`(x, \dot{x})`$ の組にして `solve_ivp` で解く。シンプレクティック法は将来（FR-29） |
-| API-42 | `ode::{Rk4 { h }, DormandPrince54, Rosenbrock { jacobian }}` | 解法。`Rosenbrock` の `jacobian` は `Jacobian::Numerical` か、利用者の関数 |
+| API-42 | `ode::{Rk4 { h }, DormandPrince54, Rosenbrock { jacobian: Jacobian::Numerical }}` | 解法。`Rosenbrock` は RODAS（Hairer & Wanner）。Jacobi 行列は数値微分（利用者が与える形は将来、FR-30） |
 | API-43 | `ode::Tolerance { rtol, atol }` | 許容値。`rtol` は無次元の数、`atol` は状態と同じ型 |
 | API-44 | `ode::Solution { t, y, stats }`、`ode::SolveError` | 解と、失敗（`MaxSteps`、`StepTooSmall`、`NonFinite`、`Singular`）。`e.time()` で失敗した時刻を取り出せる |
 | API-45 | `ode::solve_ivp_with(f, ..., on_step)` | 受け入れた各歩で呼ばれる関数を渡す（途中の値を記録するため） |
 | API-46 | `quad::integrate(f, a..b, method, tol)` | 定積分 $`\int_a^b f(x)\,dx`$。結果の型は `<Y as VectorSpace>::Times<X>`（$`[f]\,[x]`$） |
 | API-47 | `quad::{Trapezoid { n }, Simpson { n }, Romberg, GaussLegendre { n }, GaussKronrod}`、`quad::Tolerance { rtol, atol }` | 解法と許容値。`GaussKronrod` は適応型（7 点 Gauss、15 点 Kronrod）。`atol` は結果と同じ型 |
 | API-48 | `quad::Integral { value, error_estimate, evaluations }`、`quad::QuadError` | 結果と、失敗（`ToleranceNotMet`、`NonFinite`） |
-| API-49 | `diff::derivative(f, x, method)`、`diff::jacobian(f, y)` | 数値微分と Jacobi 行列。方式は `Central`、`Richardson` |
+| API-49 | `diff::derivative(f, x, Central | Richardson)`、`diff::jacobian(f, &y)` | 数値微分（結果は `Derivative { value, error_estimate }`、値の次元は $`[f]/[x]`$）と Jacobi 行列（`JacobianMatrix`、基準の単位、`get(i, j)`） |
 
 ### 使い方の例
 

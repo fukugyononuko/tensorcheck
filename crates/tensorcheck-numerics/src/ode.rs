@@ -35,6 +35,21 @@ pub struct Rk4 {
 #[derive(Clone, Copy, Debug)]
 pub struct DormandPrince54;
 
+/// RODAS (Hairer & Wanner): linearly implicit Rosenbrock method of order 4(3),
+/// L-stable and stiffly accurate, adaptive step size, for stiff problems.
+#[derive(Clone, Copy, Debug)]
+pub struct Rosenbrock {
+    /// How the Jacobian `∂f/∂y` is obtained.
+    pub jacobian: Jacobian,
+}
+
+/// How the Jacobian is obtained for [`Rosenbrock`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Jacobian {
+    /// Central differences at every step (DD-15).
+    Numerical,
+}
+
 /// An ODE method.
 pub trait Method: Copy {
     #[doc(hidden)]
@@ -48,6 +63,11 @@ impl Method for Rk4 {
 impl Method for DormandPrince54 {
     fn kind(self) -> solver::OdeKind {
         solver::OdeKind::Dopri5
+    }
+}
+impl Method for Rosenbrock {
+    fn kind(self) -> solver::OdeKind {
+        solver::OdeKind::Rodas
     }
 }
 
