@@ -187,3 +187,23 @@ impl<P> ComponentDimIs<P> for crate::utility::typelevel::True {}
 )]
 pub trait IsCoordinateBasis<C> {}
 impl<C> IsCoordinateBasis<C> for crate::contracts::CoordinateBasis {}
+
+/// ERR-15: the absolute tolerance must have the type of the state (or result).
+#[diagnostic::on_unimplemented(
+    message = "the absolute tolerance must have the same type as the state",
+    label = "wrong type for `atol`",
+    note = "`atol` carries one tolerance per component, with the component's dimension"
+)]
+pub trait ToleranceFor<Y> {}
+impl<Y> ToleranceFor<Y> for Y {}
+impl<Y> ToleranceFor<Decoy<Y>> for Y {}
+
+/// ERR-14: the right-hand side must return the state type divided by the time dimension.
+#[diagnostic::on_unimplemented(
+    message = "the right-hand side must return the state type divided by the time dimension",
+    label = "wrong return type for dy/dt",
+    note = "for dy/dt = f(t, y), f must return a value whose dimension is [y]/[t]"
+)]
+pub trait RhsReturns<R> {}
+impl<R> RhsReturns<R> for R {}
+impl<R> RhsReturns<Decoy<R>> for R {}

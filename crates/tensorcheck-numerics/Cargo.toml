@@ -10,3 +10,6 @@ publish.workspace = true
 
 [dependencies]
 tensorcheck = { path = "../tensorcheck" }
+
+[dev-dependencies]
+trybuild = "1.0"

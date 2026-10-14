@@ -140,6 +140,7 @@ name = "tensorcheck-numerics"
 version = "0.0.0"
 dependencies = [
  "tensorcheck",
+ "trybuild",
 ]
 
 [[package]]

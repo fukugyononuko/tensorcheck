@@ -29,6 +29,7 @@ use crate::utility::linear::LinearError;
 use crate::utility::scalar::Scalar;
 use crate::utility::typelevel::N1;
 use crate::utility::typelevel::{Concat, Cons, Nil};
+use crate::utility::vector_space::{PerDim, TimesDim, VectorSpace};
 
 pub use crate::contracts::{Covector, Quantity, Rank2, Rank3, Rank4, Tensor, Vector};
 
@@ -763,4 +764,41 @@ impl<D, C: Chart> Tensor<D, Cons<Up<C>, Nil>, NoSym, Tensorial, f64> {
         parts.write(&mut buf);
         Tensor::from_flat_fn(|i| buf[i])
     }
+}
+
+// ---------------------------------------------------------------------------
+// Tensors and points as solver states (U05, DD-11)
+
+impl<D, S: Slots, Sym, K> VectorSpace for Tensor<D, S, Sym, K, f64> {
+    const LEN: usize = S::LEN;
+    fn component(&self, i: usize) -> f64 {
+        self.flat(i)
+    }
+    fn from_components(f: impl FnMut(usize) -> f64) -> Self {
+        Tensor::from_flat_fn(f)
+    }
+}
+impl<D: DimDiv<Dt>, Dt, S: Slots, Sym, K> PerDim<Dt> for Tensor<D, S, Sym, K, f64> {
+    type Out = Tensor<Quot<D, Dt>, S, Sym, K, f64>;
+}
+impl<D: DimMul<Dx>, Dx, S: Slots, Sym, K> TimesDim<Dx> for Tensor<D, S, Sym, K, f64> {
+    type Out = Tensor<Prod<D, Dx>, S, Sym, K, f64>;
+}
+
+impl<C: Chart> VectorSpace for Point<C> {
+    const LEN: usize = <C::Space as Extent>::N;
+    fn component(&self, i: usize) -> f64 {
+        self.get(i)
+    }
+    fn from_components(f: impl FnMut(usize) -> f64) -> Self {
+        Point::from_base(C::Space::from_fn(f))
+    }
+}
+/// The rate of change of a point is a vector of coordinate velocities, with overall
+/// dimension `[X]/[D]` (components `[x^a]/[D]`).
+impl<C: Chart, Dt> PerDim<Dt> for Point<C>
+where
+    <C::Space as Space>::RefDim: DimDiv<Dt>,
+{
+    type Out = Vector<Quot<<C::Space as Space>::RefDim, Dt>, C>;
 }

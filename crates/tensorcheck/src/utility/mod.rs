@@ -6,3 +6,4 @@ pub mod extent;
 pub mod linear;
 pub mod scalar;
 pub mod typelevel;
+pub mod vector_space;
