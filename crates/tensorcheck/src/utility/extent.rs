@@ -19,6 +19,23 @@ pub trait Extent: 'static {
     fn sym_from_fn<T: Copy>(f: impl FnMut(usize) -> T) -> Self::SymArr<T>;
     /// Builds an `[T; n(n-1)/2]` from a function of the index.
     fn anti_from_fn<T: Copy>(f: impl FnMut(usize) -> T) -> Self::AntiArr<T>;
+    /// Views a slice of `[T; n]` as one flat slice (no copy, no `unsafe`).
+    fn flatten<T: Copy>(xs: &[Self::Arr<T>]) -> &[T];
+}
+
+/// Largest rank of a tensor (and of the slots of one contraction).
+pub const MAX_RANK: usize = 12;
+
+/// `[x, a[0], a[1], …]` (drops the last element), in a constant context.
+pub const fn prepend(x: usize, a: [usize; MAX_RANK]) -> [usize; MAX_RANK] {
+    let mut out = [0; MAX_RANK];
+    out[0] = x;
+    let mut i = 1;
+    while i < MAX_RANK {
+        out[i] = a[i - 1];
+        i += 1;
+    }
+    out
 }
 
 /// Position of `(i, j)` (any order) in the independent components of a symmetric

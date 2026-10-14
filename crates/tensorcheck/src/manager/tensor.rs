@@ -20,7 +20,7 @@ use crate::engine::index::{
     inverse_jacobian_at, lower, upper,
 };
 use crate::engine::index::{Here, There};
-use crate::engine::metric::{Metric, inverse_at, metric_at};
+use crate::engine::metric::{Metric, inverse_at, inverse_into, metric_at, metric_into};
 use crate::engine::symmetry::{Antisymmetric, NoSym, Symmetric};
 use crate::utility::diagnostics::RhsReturns;
 use crate::utility::diagnostics::{ComponentDimIs, SameSlot};
@@ -314,7 +314,7 @@ impl<D, S: Slots, Sym, K, N: Scalar> Tensor<D, S, Sym, K, N> {
     /// let w = (t.idx((a, b)) * v.idx(b)).into_tensor();
     /// assert_eq!(w.components_in(m), [1.0, 2.0, 3.0]);
     /// ```
-    pub fn idx<L: IntoLabels>(self, _labels: L) -> Labeled<Self, <S as ZipLabels<L::List>>::Out>
+    pub fn idx<L: IntoLabels>(&self, _labels: L) -> Labeled<&Self, <S as ZipLabels<L::List>>::Out>
     where
         S: ZipLabels<L::List>,
         <S as ZipLabels<L::List>>::Equal: LabelCount<L::List>,
@@ -336,37 +336,75 @@ pub struct Labeled<T, L, U = Nil> {
     _l: PhantomData<(L, U)>,
 }
 
-impl<D, S: Slots, Sym, K, N: Scalar, L, U> Labeled<Tensor<D, S, Sym, K, N>, L, U> {
+/// A tensor, owned or borrowed, inside a labeled expression. `idx` borrows the
+/// tensor so that large tensors are not copied; products own their result.
+pub trait TensorLike {
+    /// Dimension.
+    type D;
+    /// Slots.
+    type S: Slots;
+    /// Symmetry.
+    type Sym;
+    /// Tensoriality.
+    type K;
+    /// Component type.
+    type N: Scalar;
+    /// The tensor.
+    fn as_tensor(&self) -> &Tensor<Self::D, Self::S, Self::Sym, Self::K, Self::N>;
+}
+impl<D, S: Slots, Sym, K, N: Scalar> TensorLike for Tensor<D, S, Sym, K, N> {
+    type D = D;
+    type S = S;
+    type Sym = Sym;
+    type K = K;
+    type N = N;
+    #[inline(always)]
+    fn as_tensor(&self) -> &Self {
+        self
+    }
+}
+impl<D, S: Slots, Sym, K, N: Scalar> TensorLike for &Tensor<D, S, Sym, K, N> {
+    type D = D;
+    type S = S;
+    type Sym = Sym;
+    type K = K;
+    type N = N;
+    #[inline(always)]
+    fn as_tensor(&self) -> &Tensor<D, S, Sym, K, N> {
+        self
+    }
+}
+
+impl<T: TensorLike, L, U> Labeled<T, L, U> {
     /// Contracts repeated labels within this expression and returns the tensor. The
     /// remaining indices keep their order of appearance (API-29, API-30).
     ///
     /// The result has no symmetry marker (2b §CMP-E04).
-    pub fn into_tensor(self) -> Tensor<D, <<L as Contract>::Out as StripLabels>::Slots, NoSym, K, N>
+    pub fn into_tensor(
+        self,
+    ) -> Tensor<T::D, <<L as Contract>::Out as StripLabels>::Slots, NoSym, T::K, T::N>
     where
         L: Contract + LabelIds,
         <L as Contract>::Out: StripLabels,
     {
-        let one = N::one();
+        let one = T::N::one();
         Tensor::from_store(contract::<
-            S,
+            T::S,
             Nil,
             <<L as Contract>::Out as StripLabels>::Slots,
             L,
             Nil,
-            N,
-        >(&self.t.c, &one))
+            T::N,
+        >(&self.t.as_tensor().c, &one))
     }
 }
 
-impl<D1, S1, Sym1, K1, N, LA, UA, D2, S2, Sym2, K2, LB, UB>
-    Mul<Labeled<Tensor<D2, S2, Sym2, K2, N>, LB, UB>>
-    for Labeled<Tensor<D1, S1, Sym1, K1, N>, LA, UA>
+impl<T1, T2, LA, UA, LB, UB> Mul<Labeled<T2, LB, UB>> for Labeled<T1, LA, UA>
 where
-    S1: Slots,
-    S2: Slots,
-    N: Scalar,
-    D1: DimMul<D2>,
-    K1: KindMul<K2>,
+    T1: TensorLike,
+    T2: TensorLike<N = T1::N>,
+    T1::D: DimMul<T2::D>,
+    T1::K: KindMul<T2::K>,
     LA: Concat<LB> + LabelIds,
     LB: LabelIds,
     <LA as Concat<LB>>::Out: Contract + AllAbsent<<UA as Concat<UB>>::Out>,
@@ -376,19 +414,20 @@ where
 {
     type Output = Labeled<
         Tensor<
-            Prod<D1, D2>,
+            Prod<T1::D, T2::D>,
             <Contracted<LA, LB> as StripLabels>::Slots,
             NoSym,
-            <K1 as KindMul<K2>>::Out,
-            N,
+            <T1::K as KindMul<T2::K>>::Out,
+            T1::N,
         >,
         Contracted<LA, LB>,
         <<UA as Concat<UB>>::Out as Concat<<<LA as Concat<LB>>::Out as Contract>::Dummies>>::Out,
     >;
     #[inline(always)]
-    fn mul(self, rhs: Labeled<Tensor<D2, S2, Sym2, K2, N>, LB, UB>) -> Self::Output {
-        let c = contract::<S1, S2, <Contracted<LA, LB> as StripLabels>::Slots, LA, LB, N>(
-            &self.t.c, &rhs.t.c,
+    fn mul(self, rhs: Labeled<T2, LB, UB>) -> Self::Output {
+        let c = contract::<T1::S, T2::S, <Contracted<LA, LB> as StripLabels>::Slots, LA, LB, T1::N>(
+            &self.t.as_tensor().c,
+            &rhs.t.as_tensor().c,
         );
         Labeled {
             t: Tensor::from_store(c),
@@ -545,6 +584,29 @@ impl<D, S: Slots, Sym, K> Tensor<D, S, Sym, K, f64> {
         )
     }
 
+    /// Applies the `n × n` matrix `mat` to slot number `pos`, reading the components
+    /// from a flat slice and writing the result without allocating.
+    #[inline(always)]
+    fn apply_matrix<S2: Slots, D2, Sym2>(
+        self,
+        pos: usize,
+        mat: &[f64],
+    ) -> Tensor<D2, S2, Sym2, K, f64> {
+        let ext = S::EXTENTS;
+        let n = ext[pos];
+        let inner: usize = ext[pos + 1..S::RANK].iter().product();
+        let data = S::flat(&self.c);
+        Tensor::from_flat_fn(|o| {
+            let i = (o / inner) % n;
+            let base = o - i * inner;
+            let mut acc = 0.0;
+            for k in 0..n {
+                acc += mat[i * n + k] * data[base + k * inner];
+            }
+            acc
+        })
+    }
+
     /// Lowers index number `P` with the metric tensor `g` at `p`:
     /// `T_a = g_ab T^b` (API-31).
     pub fn lower<P, G: Metric>(
@@ -560,10 +622,15 @@ impl<D, S: Slots, Sym, K> Tensor<D, S, Sym, K, f64> {
         G::Chart: MetricOn<<<S as SlotAt<P>>::Slot as Slot>::Chart, G>,
         D: DimMul<G::Dim>,
     {
-        let gm = metric_at(g, p);
-        let (flat, ext) = self.flat_vec();
-        let out = apply_at_slot(&flat, &ext, <S as SlotAt<P>>::POS, &gm);
-        Tensor::from_flat_fn(|i| out[i])
+        let n = <<G::Chart as Chart>::Space as Extent>::N;
+        let mut gm = [0.0; 64];
+        if n * n <= 64 {
+            metric_into(g, p, &mut gm[..n * n]);
+            self.apply_matrix(<S as SlotAt<P>>::POS, &gm[..n * n])
+        } else {
+            let full = metric_at(g, p);
+            self.apply_matrix(<S as SlotAt<P>>::POS, &full)
+        }
     }
 
     /// Raises index number `P` with the inverse metric tensor at `p`:
@@ -581,10 +648,15 @@ impl<D, S: Slots, Sym, K> Tensor<D, S, Sym, K, f64> {
         G::Chart: MetricOn<<<S as SlotAt<P>>::Slot as Slot>::Chart, G>,
         D: DimDiv<G::Dim>,
     {
-        let ginv = inverse_at(g, p)?;
-        let (flat, ext) = self.flat_vec();
-        let out = apply_at_slot(&flat, &ext, <S as SlotAt<P>>::POS, &ginv);
-        Ok(Tensor::from_flat_fn(|i| out[i]))
+        let n = <<G::Chart as Chart>::Space as Extent>::N;
+        let mut ginv = [0.0; 64];
+        if n * n <= 64 {
+            inverse_into(g, p, &mut ginv[..n * n])?;
+            Ok(self.apply_matrix(<S as SlotAt<P>>::POS, &ginv[..n * n]))
+        } else {
+            let full = inverse_at(g, p)?;
+            Ok(self.apply_matrix(<S as SlotAt<P>>::POS, &full))
+        }
     }
 
     /// Expresses this tensor at `p` in the target chart of `xf` (API-32). Upper

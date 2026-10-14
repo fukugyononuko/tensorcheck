@@ -27,6 +27,9 @@ macro_rules! space {
             fn anti_from_fn<T: Copy>(f: impl FnMut(usize) -> T) -> [T; $n * ($n - 1) / 2] {
                 core::array::from_fn(f)
             }
+            fn flatten<T: Copy>(xs: &[[T; $n]]) -> &[T] {
+                xs.as_flattened()
+            }
         }
         impl $crate::engine::index::Space for $name {
             type RefDim = $refdim;

@@ -4,9 +4,6 @@
 // Index loops mirror the formulas (several arrays share the index).
 #![allow(clippy::needless_range_loop)]
 
-/// The right-hand side on plain arrays.
-pub type Rhs<'a> = dyn FnMut(f64, &[f64], &mut [f64]) + 'a;
-
 /// Work arrays for a method with `stages` stages and `n` components.
 pub struct Work {
     /// Stage derivatives `k_i`.
@@ -25,7 +22,14 @@ impl Work {
 }
 
 /// The classical fourth-order Runge–Kutta step: `y_new = y + h Σ b_i k_i`.
-pub fn rk4(f: &mut Rhs, t: f64, y: &[f64], h: f64, w: &mut Work, y_new: &mut [f64]) {
+pub fn rk4<F: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
+    f: &mut F,
+    t: f64,
+    y: &[f64],
+    h: f64,
+    w: &mut Work,
+    y_new: &mut [f64],
+) {
     let n = y.len();
     f(t, y, &mut w.k[0]);
     for i in 0..n {
@@ -108,8 +112,8 @@ pub mod dopri5 {
 /// One Dormand–Prince 5(4) step. `w.k[0]` must hold `f(t, y)` on entry (first same
 /// as last); on return `w.k[6]` holds `f(t + h, y_new)`. Writes the error estimate
 /// `y5 − y4` into `err`.
-pub fn dopri5_step(
-    f: &mut Rhs,
+pub fn dopri5_step<F: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
+    f: &mut F,
     t: f64,
     y: &[f64],
     h: f64,
@@ -315,8 +319,8 @@ impl RosenbrockWork {
 /// time derivative `∂f/∂t`. Writes the solution into `y_new` and the error estimate
 /// (the last stage increment) into `err`. Fails if `E` is singular.
 #[allow(clippy::too_many_arguments)]
-pub fn rodas_step(
-    f: &mut Rhs,
+pub fn rodas_step<F: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
+    f: &mut F,
     t: f64,
     y: &[f64],
     h: f64,

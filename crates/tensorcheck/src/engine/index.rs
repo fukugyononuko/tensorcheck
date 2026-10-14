@@ -227,23 +227,24 @@ impl<L, Sl: SlotExtent + 'static, T: StripLabels> StripLabels for Cons<Ix<L, Sl>
     type Slots = Cons<Sl, T::Slots>;
 }
 
-/// Run-time information of a labeled list: the label number of each slot.
+/// The label number of each slot of a labeled list.
 pub trait LabelIds {
     /// Number of slots.
     const RANK: usize;
+    /// Label numbers, padded with zeros, as a constant.
+    const IDS: [usize; MAX_RANK];
     /// Writes the label numbers into `out`.
-    fn ids(out: &mut [usize]);
+    fn ids(out: &mut [usize]) {
+        out.copy_from_slice(&Self::IDS[..out.len()]);
+    }
 }
 impl LabelIds for Nil {
     const RANK: usize = 0;
-    fn ids(_: &mut [usize]) {}
+    const IDS: [usize; MAX_RANK] = [0; MAX_RANK];
 }
 impl<L: Label, Sl, T: LabelIds> LabelIds for Cons<Ix<L, Sl>, T> {
     const RANK: usize = T::RANK + 1;
-    fn ids(out: &mut [usize]) {
-        out[0] = <L::Id as Nat>::VALUE;
-        T::ids(&mut out[1..]);
-    }
+    const IDS: [usize; MAX_RANK] = crate::utility::extent::prepend(<L::Id as Nat>::VALUE, T::IDS);
 }
 
 /// The free part of the concatenation of two labeled lists.
@@ -253,7 +254,277 @@ pub type Contracted<LA, LB> = <<LA as Concat<LB>>::Out as Contract>::Out;
 // Contraction at the value level
 
 /// Largest total rank (both factors together) that one contraction may involve.
-pub const MAX_RANK: usize = 12;
+pub use crate::utility::extent::MAX_RANK;
+
+/// Largest table in a constant contraction plan (outputs or contracted index
+/// combinations). Larger contractions use the run-time algorithm.
+pub const PLAN_TABLE: usize = 1024;
+
+/// A contraction computed once per combination of types, at compile time:
+/// `out[o] = Σ_c A[a_off[o] + pa[c]] · B[b_off[o] + pb[c]]` on flat slices.
+pub struct Plan {
+    /// Whether the tables were large enough (otherwise use the run-time algorithm).
+    pub fits: bool,
+    /// Number of output components.
+    pub out_len: usize,
+    /// Number of combinations of contracted indices.
+    pub pair_len: usize,
+    /// Offset in A of output component `o` (free indices only).
+    pub a_off: [u32; PLAN_TABLE],
+    /// Offset in B of output component `o`.
+    pub b_off: [u32; PLAN_TABLE],
+    /// Offset in A of contracted combination `c`.
+    pub pa: [u32; PLAN_TABLE],
+    /// Offset in B of contracted combination `c`.
+    pub pb: [u32; PLAN_TABLE],
+    /// If `pa[c] = c · step_a` and `pb[c] = c · step_b` for every `c`, the steps
+    /// (the inner sum is then a strided dot product); otherwise 0.
+    pub step_a: usize,
+    /// See `step_a`.
+    pub step_b: usize,
+    /// Whether the contracted offsets are an arithmetic progression.
+    pub affine: bool,
+}
+
+impl Plan {
+    /// Builds the plan from the factors' ranks, extents and label numbers.
+    pub const fn make(
+        ra: usize,
+        rb: usize,
+        ext_a: [usize; MAX_RANK],
+        ext_b: [usize; MAX_RANK],
+        ids_a: [usize; MAX_RANK],
+        ids_b: [usize; MAX_RANK],
+    ) -> Plan {
+        let r = ra + rb;
+        let mut ids = [0usize; 2 * MAX_RANK];
+        let mut ext = [0usize; 2 * MAX_RANK];
+        let mut i = 0;
+        while i < ra {
+            ids[i] = ids_a[i];
+            ext[i] = ext_a[i];
+            i += 1;
+        }
+        i = 0;
+        while i < rb {
+            ids[ra + i] = ids_b[i];
+            ext[ra + i] = ext_b[i];
+            i += 1;
+        }
+        // Strides within A and within B (row-major).
+        let mut stride = [0usize; 2 * MAX_RANK];
+        let mut s = 1;
+        i = ra;
+        while i > 0 {
+            i -= 1;
+            stride[i] = s;
+            s *= ext[i];
+        }
+        s = 1;
+        i = r;
+        while i > ra {
+            i -= 1;
+            stride[i] = s;
+            s *= ext[i];
+        }
+        // Roles: free output index number, or contracted pair number.
+        const NONE: usize = usize::MAX;
+        let mut free = [NONE; 2 * MAX_RANK];
+        let mut pair = [NONE; 2 * MAX_RANK];
+        let mut pair_ext = [0usize; MAX_RANK];
+        let mut out_ext = [0usize; 2 * MAX_RANK];
+        let (mut nfree, mut npair) = (0, 0);
+        i = 0;
+        while i < r {
+            if pair[i] == NONE {
+                let mut j = i + 1;
+                let mut found = NONE;
+                while j < r {
+                    if ids[j] == ids[i] && found == NONE {
+                        found = j;
+                    }
+                    j += 1;
+                }
+                if found == NONE {
+                    free[i] = nfree;
+                    out_ext[nfree] = ext[i];
+                    nfree += 1;
+                } else {
+                    pair[i] = npair;
+                    pair[found] = npair;
+                    pair_ext[npair] = ext[i];
+                    npair += 1;
+                }
+            }
+            i += 1;
+        }
+        let mut out_len = 1;
+        i = 0;
+        while i < nfree {
+            out_len *= out_ext[i];
+            i += 1;
+        }
+        let mut pair_len = 1;
+        i = 0;
+        while i < npair {
+            pair_len *= pair_ext[i];
+            i += 1;
+        }
+        let mut plan = Plan {
+            fits: out_len <= PLAN_TABLE && pair_len <= PLAN_TABLE,
+            out_len,
+            pair_len,
+            a_off: [0; PLAN_TABLE],
+            b_off: [0; PLAN_TABLE],
+            pa: [0; PLAN_TABLE],
+            pb: [0; PLAN_TABLE],
+            step_a: 0,
+            step_b: 0,
+            affine: false,
+        };
+        if !plan.fits {
+            return plan;
+        }
+        // Offsets of every output component.
+        let mut o = 0;
+        while o < out_len {
+            let mut idx = [0usize; 2 * MAX_RANK];
+            let mut rem = o;
+            let mut k = nfree;
+            while k > 0 {
+                k -= 1;
+                idx[k] = rem % out_ext[k];
+                rem /= out_ext[k];
+            }
+            let (mut fa, mut fb) = (0, 0);
+            i = 0;
+            while i < r {
+                if free[i] != NONE {
+                    if i < ra {
+                        fa += idx[free[i]] * stride[i];
+                    } else {
+                        fb += idx[free[i]] * stride[i];
+                    }
+                }
+                i += 1;
+            }
+            plan.a_off[o] = fa as u32;
+            plan.b_off[o] = fb as u32;
+            o += 1;
+        }
+        // Offsets of every combination of contracted indices.
+        let mut c = 0;
+        while c < pair_len {
+            let mut idx = [0usize; MAX_RANK];
+            let mut rem = c;
+            let mut k = npair;
+            while k > 0 {
+                k -= 1;
+                idx[k] = rem % pair_ext[k];
+                rem /= pair_ext[k];
+            }
+            let (mut da, mut db) = (0, 0);
+            i = 0;
+            while i < r {
+                if pair[i] != NONE {
+                    if i < ra {
+                        da += idx[pair[i]] * stride[i];
+                    } else {
+                        db += idx[pair[i]] * stride[i];
+                    }
+                }
+                i += 1;
+            }
+            plan.pa[c] = da as u32;
+            plan.pb[c] = db as u32;
+            c += 1;
+        }
+        // Arithmetic progression? (true for contracting trailing/leading indices).
+        let (sa, sb) = if pair_len > 1 {
+            (plan.pa[1] as usize, plan.pb[1] as usize)
+        } else {
+            (0, 0)
+        };
+        let mut affine = true;
+        c = 0;
+        while c < pair_len {
+            if plan.pa[c] as usize != c * sa || plan.pb[c] as usize != c * sb {
+                affine = false;
+            }
+            c += 1;
+        }
+        plan.affine = affine;
+        plan.step_a = sa;
+        plan.step_b = sb;
+        plan
+    }
+}
+
+/// The constant plan for contracting `SA` (labels `LA`) with `SB` (labels `LB`).
+///
+/// The scalar facts are separate constants so that loop bounds and strides are
+/// compile-time constants the optimizer can unroll and vectorize.
+pub trait ContractPlan {
+    /// The plan, evaluated at compile time for each combination of types.
+    const PLAN: Plan;
+    /// `PLAN.fits`.
+    const FITS: bool;
+    /// `PLAN.out_len`.
+    const OUT_LEN: usize;
+    /// `PLAN.pair_len`.
+    const PAIR_LEN: usize;
+    /// Whether contracted offsets are `c · step`.
+    const AFFINE: bool;
+    /// Contracted step in A.
+    const STEP_A: usize;
+    /// Contracted step in B.
+    const STEP_B: usize;
+    /// Whether output offsets are `o · step` in both factors.
+    const OUT_AFFINE: bool;
+    /// Output step in A.
+    const OUT_STEP_A: usize;
+    /// Output step in B.
+    const OUT_STEP_B: usize;
+}
+impl<SA: Slots, SB: Slots, LA: LabelIds, LB: LabelIds> ContractPlan for (SA, SB, LA, LB) {
+    const PLAN: Plan = Plan::make(
+        SA::RANK,
+        SB::RANK,
+        SA::EXTENTS,
+        SB::EXTENTS,
+        LA::IDS,
+        LB::IDS,
+    );
+    const FITS: bool = Self::PLAN.fits;
+    const OUT_LEN: usize = Self::PLAN.out_len;
+    const PAIR_LEN: usize = Self::PLAN.pair_len;
+    const AFFINE: bool = Self::PLAN.affine;
+    const STEP_A: usize = Self::PLAN.step_a;
+    const STEP_B: usize = Self::PLAN.step_b;
+    const OUT_AFFINE: bool = out_affine(&Self::PLAN).0;
+    const OUT_STEP_A: usize = out_affine(&Self::PLAN).1;
+    const OUT_STEP_B: usize = out_affine(&Self::PLAN).2;
+}
+
+/// Whether `a_off[o] = o · sa` and `b_off[o] = o · sb` for every output `o`.
+const fn out_affine(p: &Plan) -> (bool, usize, usize) {
+    if !p.fits {
+        return (false, 0, 0);
+    }
+    let (sa, sb) = if p.out_len > 1 {
+        (p.a_off[1] as usize, p.b_off[1] as usize)
+    } else {
+        (0, 0)
+    };
+    let mut o = 0;
+    while o < p.out_len {
+        if p.a_off[o] as usize != o * sa || p.b_off[o] as usize != o * sb {
+            return (false, 0, 0);
+        }
+        o += 1;
+    }
+    (true, sa, sb)
+}
 
 /// Computes `Σ A_(…) B_(…)` over every repeated label.
 ///
@@ -261,6 +532,59 @@ pub const MAX_RANK: usize = 12;
 /// label numbers. The result has the free indices of A, then those of B, in order.
 #[inline(always)]
 pub fn contract<SA: Slots, SB: Slots, SO: Slots, LA: LabelIds, LB: LabelIds, N: Scalar>(
+    a: &SA::Store<N>,
+    b: &SB::Store<N>,
+) -> SO::Store<N> {
+    type P<SA, SB, LA, LB> = (SA, SB, LA, LB);
+    if <P<SA, SB, LA, LB> as ContractPlan>::FITS {
+        let (fa, fb) = (SA::flat(a), SB::flat(b));
+        let len = <P<SA, SB, LA, LB> as ContractPlan>::PAIR_LEN;
+        let (sa, sb) = (
+            <P<SA, SB, LA, LB> as ContractPlan>::STEP_A,
+            <P<SA, SB, LA, LB> as ContractPlan>::STEP_B,
+        );
+        if <P<SA, SB, LA, LB> as ContractPlan>::AFFINE
+            && <P<SA, SB, LA, LB> as ContractPlan>::OUT_AFFINE
+        {
+            // Both loops are affine with constant bounds and steps: the fast path.
+            let (oa, ob) = (
+                <P<SA, SB, LA, LB> as ContractPlan>::OUT_STEP_A,
+                <P<SA, SB, LA, LB> as ContractPlan>::OUT_STEP_B,
+            );
+            return SO::from_fn(|o| {
+                let (a0, b0) = (o * oa, o * ob);
+                let mut acc = N::zero();
+                for c in 0..len {
+                    acc = acc + fa[a0 + c * sa] * fb[b0 + c * sb];
+                }
+                acc
+            });
+        }
+        let plan = &<P<SA, SB, LA, LB> as ContractPlan>::PLAN;
+        if <P<SA, SB, LA, LB> as ContractPlan>::AFFINE {
+            return SO::from_fn(|o| {
+                let (a0, b0) = (plan.a_off[o] as usize, plan.b_off[o] as usize);
+                let mut acc = N::zero();
+                for c in 0..len {
+                    acc = acc + fa[a0 + c * sa] * fb[b0 + c * sb];
+                }
+                acc
+            });
+        }
+        return SO::from_fn(|o| {
+            let (a0, b0) = (plan.a_off[o] as usize, plan.b_off[o] as usize);
+            let mut acc = N::zero();
+            for c in 0..len {
+                acc = acc + fa[a0 + plan.pa[c] as usize] * fb[b0 + plan.pb[c] as usize];
+            }
+            acc
+        });
+    }
+    contract_runtime::<SA, SB, SO, LA, LB, N>(a, b)
+}
+
+/// The run-time contraction algorithm, for contractions too large for a plan table.
+fn contract_runtime<SA: Slots, SB: Slots, SO: Slots, LA: LabelIds, LB: LabelIds, N: Scalar>(
     a: &SA::Store<N>,
     b: &SB::Store<N>,
 ) -> SO::Store<N> {
