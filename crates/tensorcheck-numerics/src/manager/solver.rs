@@ -7,10 +7,11 @@ use core::ops::Range;
 use tensorcheck::{Quantity, TimesDim, VectorSpace};
 
 use crate::engine::error_control::{judge, max_norm, next_step, pick_interval, rms_norm};
-use crate::engine::ode_step::{Rhs, Work, dopri5_step, rk4};
+use crate::engine::ode_step::{Rhs, RosenbrockWork, Work, dopri5_step, rk4, rodas_step};
 use crate::engine::quadrature::{gauss_kronrod15, gauss_legendre, romberg, simpson, trapezoid};
 use crate::ode::{Solution, SolveError, Stats};
 use crate::quad::{Integral, QuadError};
+use tensorcheck::internal::engine::{central, jacobian_fd, ridders};
 
 /// The quadrature method, as seen by the manager.
 #[doc(hidden)]
@@ -141,6 +142,7 @@ where
 pub enum OdeKind {
     Rk4(f64),
     Dopri5,
+    Rodas,
 }
 
 pub(crate) fn solve_ivp<T, Y, R, F, A>(
@@ -242,6 +244,74 @@ where
                 }
             }
         }
+        OdeKind::Rodas => {
+            let mut w = RosenbrockWork::new(n);
+            let mut err = vec![0.0; n];
+            let mut f0 = vec![0.0; n];
+            let mut ft = vec![0.0; n];
+            let scale: Vec<f64> = atol.iter().map(|a| a.max(f64::MIN_POSITIVE)).collect();
+            let t_scale = (t1 - t0).abs().max(f64::MIN_POSITIVE);
+            rhs(t, &y, &mut f0);
+            let mut h = initial_step(&mut rhs, t, &y, &f0, dir, 3, &atol, rtol);
+            let mut rejected_last = false;
+            while dir * (t1 - t) > 0.0 {
+                if stats.steps + stats.rejected >= crate::ode::MAX_STEPS {
+                    return Err(SolveError::MaxSteps { t: at(t) });
+                }
+                if h.abs() < 16.0 * f64::EPSILON * t.abs().max(f64::MIN_POSITIVE) {
+                    return Err(SolveError::StepTooSmall { t: at(t), h });
+                }
+                if dir * (t + h - t1) > 0.0 {
+                    h = t1 - t;
+                }
+                // Jacobian ∂f/∂y and time derivative ∂f/∂t at (t, y) by central differences (E08).
+                let tt = t;
+                let jac = jacobian_fd(
+                    &mut |yy: &[f64], out: &mut [f64]| rhs(tt, yy, out),
+                    &y,
+                    n,
+                    &scale,
+                );
+                let yy = y.clone();
+                let dfdt = jacobian_fd(
+                    &mut |ts: &[f64], out: &mut [f64]| rhs(ts[0], &yy, out),
+                    &[t],
+                    n,
+                    &[t_scale],
+                );
+                ft.copy_from_slice(&dfdt);
+                if rodas_step(
+                    &mut rhs, t, &y, h, &f0, &jac, &ft, &mut w, &mut y_new, &mut err,
+                )
+                .is_err()
+                {
+                    return Err(SolveError::Singular { t: at(t) });
+                }
+                if !finite(&y_new) || !finite(&err) {
+                    stats.rejected += 1;
+                    h *= 0.25;
+                    if h.abs() < 16.0 * f64::EPSILON * t.abs().max(f64::MIN_POSITIVE) {
+                        return Err(SolveError::NonFinite { t: at(t) });
+                    }
+                    rejected_last = true;
+                    continue;
+                }
+                let e = rms_norm(&err, &y, &y_new, &atol, rtol);
+                if judge(e) {
+                    t += h;
+                    core::mem::swap(&mut y, &mut y_new);
+                    rhs(t, &y, &mut f0);
+                    stats.steps += 1;
+                    on_step(at(t), &Y::from_components(|i| y[i]));
+                    h = next_step(h, e, 3, rejected_last);
+                    rejected_last = false;
+                } else {
+                    stats.rejected += 1;
+                    h = next_step(h, e, 3, true);
+                    rejected_last = true;
+                }
+            }
+        }
     }
     stats.evaluations = evals.get();
     Ok(Solution {
@@ -283,4 +353,55 @@ fn initial_step(
         (0.01 / d1.max(d2)).powf(1.0 / (q as f64 + 1.0))
     };
     dir * (100.0 * h0).min(h1)
+}
+
+// ---------------------------------------------------------------------------
+// Numerical differentiation (2b §CMP-M02 `derivative`, `jacobian`)
+
+/// `df/dx` per component, in base units, and the largest error estimate.
+pub(crate) fn derivative<X, Y, F>(mut f: F, x: Quantity<X>, richardson: bool) -> (Vec<f64>, f64)
+where
+    F: FnMut(Quantity<X>) -> Y,
+    Y: VectorSpace,
+{
+    let x0 = x.base_value();
+    let mut values = vec![0.0; Y::LEN];
+    let mut worst: f64 = 0.0;
+    for (k, v) in values.iter_mut().enumerate() {
+        let mut g = |xx: f64| f(Quantity::from_base_components(xx)).component(k);
+        if richardson {
+            let (d, e) = ridders(&mut g, x0, 0.1 * x0.abs().max(1.0));
+            *v = d;
+            worst = worst.max(e);
+        } else {
+            let d = central(&mut g, x0, 1.0);
+            let h = f64::EPSILON.cbrt() * x0.abs().max(1.0) * 0.5;
+            let d2 = (g(x0 + h) - g(x0 - h)) / (2.0 * h);
+            *v = d;
+            worst = worst.max((d - d2).abs());
+        }
+    }
+    (values, worst)
+}
+
+/// The Jacobian of `f` at `y` by central differences, row-major, base units.
+pub(crate) fn jacobian<Y, R, F>(mut f: F, y: &Y) -> Vec<f64>
+where
+    F: FnMut(&Y) -> R,
+    Y: VectorSpace,
+    R: VectorSpace,
+{
+    let y0: Vec<f64> = (0..Y::LEN).map(|i| y.component(i)).collect();
+    let scale = vec![1.0; Y::LEN];
+    jacobian_fd(
+        &mut |yy: &[f64], out: &mut [f64]| {
+            let r = f(&Y::from_components(|i| yy[i]));
+            for (k, o) in out.iter_mut().enumerate() {
+                *o = r.component(k);
+            }
+        },
+        &y0,
+        R::LEN,
+        &scale,
+    )
 }

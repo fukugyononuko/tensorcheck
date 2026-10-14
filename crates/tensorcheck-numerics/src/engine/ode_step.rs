@@ -172,6 +172,35 @@ mod tests {
         assert!((order - 5.0).abs() <= 0.3, "order {order}");
     }
 
+    /// Global error at t = 1 for y' = y cos t with `steps` fixed RODAS steps and the
+    /// exact Jacobian cos t and ∂f/∂t = −y sin t.
+    fn rodas_error(steps: usize) -> f64 {
+        let mut f = |t: f64, y: &[f64], out: &mut [f64]| out[0] = y[0] * t.cos();
+        let h = 1.0 / steps as f64;
+        let mut w = RosenbrockWork::new(1);
+        let (mut y, mut y_new, mut err) = (vec![1.0], vec![0.0], vec![0.0]);
+        let mut t = 0.0;
+        for _ in 0..steps {
+            let f0 = [y[0] * f64::cos(t)];
+            let jac = [f64::cos(t)];
+            let ft = [-y[0] * f64::sin(t)];
+            rodas_step(
+                &mut f, t, &y, h, &f0, &jac, &ft, &mut w, &mut y_new, &mut err,
+            )
+            .unwrap();
+            t += h;
+            core::mem::swap(&mut y, &mut y_new);
+        }
+        (y[0] - 1f64.sin().exp()).abs()
+    }
+
+    #[test]
+    fn rodas_is_fourth_order() {
+        // TC-U25: halving h divides the global error by 2^4. Allowance ±0.3 (04).
+        let order = (rodas_error(10) / rodas_error(20)).log2();
+        assert!((order - 4.0).abs() <= 0.3, "order {order}");
+    }
+
     #[test]
     fn first_same_as_last_holds() {
         // The last stage is evaluated at (t + h, y_new): it equals f(t + h, y_new).
@@ -184,4 +213,198 @@ mod tests {
         f(0.1, &y_new, &mut direct);
         assert!((w.k[6][0] - direct[0]).abs() <= 2.0 * f64::EPSILON);
     }
+}
+
+/// RODAS coefficients, order 4(3), stiffly accurate, L-stable. Copied from
+/// subroutine `ROCOE` (METH = 1) of Hairer's `rodas.f`
+/// (<https://www.unige.ch/~hairer/prog/stiff/rodas.f>), the code accompanying
+/// Hairer & Wanner, *Solving Ordinary Differential Equations II*, §IV.7.
+#[allow(clippy::excessive_precision)] // digits as published in rodas.f, for comparison with the source
+pub mod rodas {
+    /// Nodes.
+    pub const C2: f64 = 0.386;
+    /// Nodes.
+    pub const C3: f64 = 0.21;
+    /// Nodes.
+    pub const C4: f64 = 0.63;
+    /// `γ_i` for the time derivative.
+    pub const D: [f64; 4] = [0.25, -0.1043, 0.1035, -0.3620000000000023e-01];
+    /// Stage weights `a_ij`.
+    pub const A21: f64 = 0.1544e+01;
+    /// Stage weights.
+    pub const A31: f64 = 0.9466785280815826;
+    /// Stage weights.
+    pub const A32: f64 = 0.2557011698983284;
+    /// Stage weights.
+    pub const A41: f64 = 0.3314825187068521e+01;
+    /// Stage weights.
+    pub const A42: f64 = 0.2896124015972201e+01;
+    /// Stage weights.
+    pub const A43: f64 = 0.9986419139977817;
+    /// Stage weights.
+    pub const A51: f64 = 0.1221224509226641e+01;
+    /// Stage weights.
+    pub const A52: f64 = 0.6019134481288629e+01;
+    /// Stage weights.
+    pub const A53: f64 = 0.1253708332932087e+02;
+    /// Stage weights.
+    pub const A54: f64 = -0.6878860361058950;
+    /// Coupling `c_ij` (divided by `h` in the stages).
+    pub const C21: f64 = -0.56688e+01;
+    /// Coupling.
+    pub const C31: f64 = -0.2430093356833875e+01;
+    /// Coupling.
+    pub const C32: f64 = -0.2063599157091915;
+    /// Coupling.
+    pub const C41: f64 = -0.1073529058151375;
+    /// Coupling.
+    pub const C42: f64 = -0.9594562251023355e+01;
+    /// Coupling.
+    pub const C43: f64 = -0.2047028614809616e+02;
+    /// Coupling.
+    pub const C51: f64 = 0.7496443313967647e+01;
+    /// Coupling.
+    pub const C52: f64 = -0.1024680431464352e+02;
+    /// Coupling.
+    pub const C53: f64 = -0.3399990352819905e+02;
+    /// Coupling.
+    pub const C54: f64 = 0.1170890893206160e+02;
+    /// Coupling.
+    pub const C61: f64 = 0.8083246795921522e+01;
+    /// Coupling.
+    pub const C62: f64 = -0.7981132988064893e+01;
+    /// Coupling.
+    pub const C63: f64 = -0.3152159432874371e+02;
+    /// Coupling.
+    pub const C64: f64 = 0.1631930543123136e+02;
+    /// Coupling.
+    pub const C65: f64 = -0.6058818238834054e+01;
+    /// Diagonal `γ`.
+    pub const GAMMA: f64 = 0.25;
+}
+
+/// Work arrays of a Rosenbrock step.
+pub struct RosenbrockWork {
+    /// `E = I/(hγ) − J`, LU-factored in place.
+    pub e: Vec<f64>,
+    /// Row permutation of the factorization.
+    pub perm: Vec<usize>,
+    /// Stage increments `k_1 … k_6`.
+    pub k: Vec<Vec<f64>>,
+    /// `f` at a stage point.
+    pub dy: Vec<f64>,
+    /// Stage point.
+    pub ys: Vec<f64>,
+}
+impl RosenbrockWork {
+    /// Allocates once per solve (RES-02).
+    pub fn new(n: usize) -> Self {
+        RosenbrockWork {
+            e: vec![0.0; n * n],
+            perm: vec![0; n],
+            k: vec![vec![0.0; n]; 6],
+            dy: vec![0.0; n],
+            ys: vec![0.0; n],
+        }
+    }
+}
+
+/// One RODAS step (DD-12), following `ROSCOR` in Hairer's `rodas.f`.
+///
+/// `f0 = f(t, y)`, `jac` the Jacobian `∂f/∂y` at `(t, y)` (row-major), `ft` the
+/// time derivative `∂f/∂t`. Writes the solution into `y_new` and the error estimate
+/// (the last stage increment) into `err`. Fails if `E` is singular.
+#[allow(clippy::too_many_arguments)]
+pub fn rodas_step(
+    f: &mut Rhs,
+    t: f64,
+    y: &[f64],
+    h: f64,
+    f0: &[f64],
+    jac: &[f64],
+    ft: &[f64],
+    w: &mut RosenbrockWork,
+    y_new: &mut [f64],
+    err: &mut [f64],
+) -> Result<(), tensorcheck::internal::utility::LinearError> {
+    use rodas::*;
+    use tensorcheck::internal::utility::{lu_decompose_with, lu_solve};
+    let n = y.len();
+    let fac = 1.0 / (h * GAMMA);
+    for i in 0..n {
+        for j in 0..n {
+            w.e[i * n + j] = -jac[i * n + j] + if i == j { fac } else { 0.0 };
+        }
+    }
+    // Only exact singularity fails here (see `lu_decompose_with`).
+    lu_decompose_with(&mut w.e, n, &mut w.perm, false)?;
+    let (hd1, hd2, hd3, hd4) = (h * D[0], h * D[1], h * D[2], h * D[3]);
+    let solve = |w: &mut RosenbrockWork, s: usize| {
+        let mut b = core::mem::take(&mut w.k[s]);
+        lu_solve(&w.e, n, &w.perm, &mut b);
+        w.k[s] = b;
+    };
+    // Stage 1.
+    for i in 0..n {
+        w.k[0][i] = f0[i] + hd1 * ft[i];
+    }
+    solve(w, 0);
+    // Stage 2.
+    for i in 0..n {
+        w.ys[i] = y[i] + A21 * w.k[0][i];
+    }
+    f(t + C2 * h, &w.ys, &mut w.dy);
+    for i in 0..n {
+        w.k[1][i] = w.dy[i] + hd2 * ft[i] + C21 / h * w.k[0][i];
+    }
+    solve(w, 1);
+    // Stage 3.
+    for i in 0..n {
+        w.ys[i] = y[i] + A31 * w.k[0][i] + A32 * w.k[1][i];
+    }
+    f(t + C3 * h, &w.ys, &mut w.dy);
+    for i in 0..n {
+        w.k[2][i] = w.dy[i] + hd3 * ft[i] + (C31 * w.k[0][i] + C32 * w.k[1][i]) / h;
+    }
+    solve(w, 2);
+    // Stage 4.
+    for i in 0..n {
+        w.ys[i] = y[i] + A41 * w.k[0][i] + A42 * w.k[1][i] + A43 * w.k[2][i];
+    }
+    f(t + C4 * h, &w.ys, &mut w.dy);
+    for i in 0..n {
+        w.k[3][i] =
+            w.dy[i] + hd4 * ft[i] + (C41 * w.k[0][i] + C42 * w.k[1][i] + C43 * w.k[2][i]) / h;
+    }
+    solve(w, 3);
+    // Stage 5 (autonomous part only, as in ROSCOR).
+    for i in 0..n {
+        w.ys[i] = y[i] + A51 * w.k[0][i] + A52 * w.k[1][i] + A53 * w.k[2][i] + A54 * w.k[3][i];
+    }
+    f(t + h, &w.ys, &mut w.dy);
+    for i in 0..n {
+        w.k[4][i] =
+            w.dy[i] + (C51 * w.k[0][i] + C52 * w.k[1][i] + C53 * w.k[2][i] + C54 * w.k[3][i]) / h;
+    }
+    solve(w, 4);
+    // Embedded solution, then stage 6.
+    for i in 0..n {
+        w.ys[i] += w.k[4][i];
+    }
+    f(t + h, &w.ys, &mut w.dy);
+    for i in 0..n {
+        w.k[5][i] = w.dy[i]
+            + (C61 * w.k[0][i]
+                + C62 * w.k[1][i]
+                + C63 * w.k[2][i]
+                + C64 * w.k[3][i]
+                + C65 * w.k[4][i])
+                / h;
+    }
+    solve(w, 5);
+    for i in 0..n {
+        y_new[i] = w.ys[i] + w.k[5][i];
+        err[i] = w.k[5][i];
+    }
+    Ok(())
 }

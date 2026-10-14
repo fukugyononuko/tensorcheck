@@ -63,7 +63,7 @@ scripts/  check_privacy.py check_workflows.py check_layers.py
   - `manager/` は `engine/`・`access/`・`utility/` だけを使う。ほかの `manager/` を使わない。
   - `engine/` は `access/`・`utility/` だけを使う。ほかの `engine/` のファイルを使わない。拡張点の trait（EXT）は各 Engine のファイルに置く。
   - `access/` は `utility/` だけを使う。`utility/` は `utility/` だけを使う。
-  - `internal` を使ってよいのは `tensorcheck-numerics/src/manager/` だけ。`examples/` と `tests/` は使わない。
+  - `internal` は 2 つに分ける（フェーズ 8）。`internal::engine`（E08）を使ってよいのは `tensorcheck-numerics/src/manager/` だけ。`internal::utility`（U04）は numerics のどの層からも使える（Engine → Utility は許されるため）。`examples/` と `tests/` はどちらも使わない。
 - `#![forbid(unsafe_code)]` を両方のクレートの `lib.rs` に置く（NFR-12）。
 
 ## 3.2 DD-02 型レベルの整数・真偽・並び（U01）
@@ -355,11 +355,11 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 | --- | --- | --- | --- |
 | `Rk4 { h }` | 陽的、固定刻み | 4（なし） | 古典的な Runge–Kutta 法 |
 | `DormandPrince54` | 陽的、埋め込み、適応刻み、FSAL | 5（4） | Dormand & Prince, *J. Comput. Appl. Math.* 6(1), 19–26 (1980) |
-| `Rosenbrock` | 線形陰的、L 安定、埋め込み、適応刻み | 4（3） | Hairer & Wanner, *Solving Ordinary Differential Equations II*, §IV.7 の RODAS（4 次）。係数が載っている版（1991 年の初版か 1996 年の第 2 版か）は、資料によって食い違うので、実装のときに原典で確かめる |
+| `Rosenbrock` | 線形陰的、L 安定、埋め込み、適応刻み | 4（3） | RODAS。係数と段の計算の手順は、Hairer が公開している `rodas.f`（<https://www.unige.ch/~hairer/prog/stiff/rodas.f>）のサブルーチン `ROCOE`（METH = 1）と `ROSCOR` から写した（Hairer & Wanner, *Solving ODEs II*, §IV.7 に付属するプログラム）。固定刻みで 4 次の収束を確かめた（フェーズ 8） |
 
 - 入口は `solve_ivp` だけで、2 階専用の解法は持たない（FR-18）。シンプレクティック法は将来（FR-29）。
 - 係数は、出典の表をそのまま定数として書き、出典をコメントに書く。
-- Rosenbrock 法の 1 歩：$`W = I - h\gamma J`$ を 1 回 LU 分解し（U04）、各段の線形方程式を同じ分解で解く。$`J`$ は利用者が与えるか、右辺が数値の型によらない形なら `Dual` で、そうでなければ差分（DD-15）で求める。
+- Rosenbrock 法の 1 歩：$`E = I/(h\gamma) - J`$ を 1 回 LU 分解し（U04）、6 つの段の線形方程式を同じ分解で解く。最後の段の増分が誤差の見積もり。$`J`$ と $`\partial f/\partial t`$ は中心差分（DD-15）で求める（利用者が与える形は FR-30）。実装での補足（フェーズ 8）：$`J`$ が固有値 0 を持つ問題（保存量がある ROBER など）では、$`h`$ が大きいと $`E`$ の条件数が大きくなり、DD-08 の判定（$`\rho < n\varepsilon`$）では誤って正則でないとされた。硬い方程式では、Hairer の元のプログラムと同じく、ピボットが厳密に 0 か有限でないときだけ失敗にする（`lu_decompose_with(…, false)`）。
 - 時間の向きは負でもよい（$`t_1 < t_0`$）。
 - `solve_ivp_with` の `on_step` は、受け入れた各歩の $`(t, y)`$ を受け取る。密出力（任意の時刻の値の補間）は将来。
 
@@ -395,7 +395,7 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 数値の型によらない形で書かれていない関数（`Fn(f64) -> f64` 相当）に使う。
 
 - 中心差分：$`f'(x) \approx (f(x + h) - f(x - h)) / 2h`$、$`h = \varepsilon^{1/3}\max(\lvert x \rvert, x_\mathrm{scale})`$。$`h`$ は丸め誤差（$`\varepsilon/h`$）と打ち切り誤差（$`h^2`$）の釣り合いから決める。
-- Richardson 補外：Ridders の方法（$`h`$ を一定の比で小さくしながら補外し、誤差の見積もりが増え始めたら止める）。誤差の見積もりも返す。
+- Richardson 補外：Ridders の方法（$`h`$ を一定の比で小さくしながら補外し、誤差の見積もりが増え始めたら止める）。誤差の見積もりも返す。実装での補足（フェーズ 8）：表の差は打ち切り誤差の経験的な目安で、上限ではない。見積もりを「安全係数 4 × 表の差」と「丸め誤差の床 $`20\,\varepsilon\,\max\lvert f \rvert / h`$」（中心差分の丸め $`2\varepsilon\lvert f\rvert/h`$ に補外による拡大およそ 9 倍を掛けたもの）の大きいほうにする。
 - Jacobi 行列：列ごとに中心差分。
 
 ## 3.16 DD-16 エラー文の実装（U03）
