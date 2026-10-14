@@ -343,6 +343,7 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 }
 ```
 
+- 実装での補足（フェーズ 6）：上のコードの形から次のように変えた。`VectorSpace` は「成分の数 `LEN`、成分を基準の単位で読む `component(i)`、成分から作る `from_components(f)`」だけを持つ。「状態 ÷ 時間」「値 × 変数」の型は、関連型（GAT）ではなく別の trait `PerDim<D>`・`TimesDim<D>` で表す（GAT にすると、次元の割り算の制約を trait の宣言に書けないため）。解法の作業用の配列は `Vec<f64>` で、解き始めるときに 1 回だけ確保する（RES-02）。
 - `Tensor` は `Raw = S::Store<f64>` で実装する。`Point` は座標の値を並べたものとして実装する（測地線の状態に使う）。
 - 要素が 2〜6 個の組（`(A, B)` など）は、要素ごとに実装する（`Raw = (A::Raw, B::Raw)`、`get` は前から順に番号を振る）。
 - `RawVec::Mat` は `Raw` の各要素を `Raw` に置き換えた入れ物（入れ子の配列の入れ子）で、要素 $`(i, j)`$ の読み書きができる。Rosenbrock 法の線形方程式は、この行列を U04 に渡して解く（大きさ 5 以上は LU 分解）。
@@ -384,7 +385,7 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 | `Trapezoid { n }` | 複合台形公式（$`n`$ 区間） | $`n`$ と $`2n`$ の差 |
 | `Simpson { n }` | 複合 Simpson 公式（$`n`$ は偶数。奇数なら型ではなく、作るときに切り上げる） | $`n`$ と $`2n`$ の差 |
 | `Romberg` | 台形公式の区間を倍々にし、Richardson 補外の表を作る（最大 20 段） | 表の対角の隣どうしの差 |
-| `GaussLegendre { n }` | $`n`$ 点の Gauss–Legendre 求積。節点は Legendre 多項式の根を Newton 法で求める（初期値 $`\cos(\pi(i - 1/4)/(n + 1/2))`$） | $`n`$ と $`n + 1`$ の差 |
+| `GaussLegendre { n }` | $`n`$ 点の Gauss–Legendre 求積。節点は Legendre 多項式の根を Newton 法で求める（初期値 $`\cos(\pi(i - 1/4)/(n + 1/2))`$）。重みは、収束した根で $`P_n'`$ を計算し直してから求める（最後の更新の前の値を使うと、3 点の公式で $`13\,\varepsilon`$ ずれた） | $`n`$ と $`n + 1`$ の差 |
 | `GaussKronrod` | 7 点 Gauss・15 点 Kronrod（節点と重みは QUADPACK の値）の適応型 | Gauss と Kronrod の差（QUADPACK の補正式） |
 
 - 被積分関数の値は `VectorSpace` の型でよい（ベクトル値の積分）。結果は `Y::Times<X>`。

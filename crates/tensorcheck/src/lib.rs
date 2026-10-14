@@ -31,6 +31,7 @@ pub use manager::tensor::{
 };
 pub use utility::linear::LinearError;
 pub use utility::scalar::Scalar;
+pub use utility::vector_space::{PerDim, TimesDim, VectorSpace};
 
 /// Connection, curvature and covariant derivatives (API-16, API-50 to API-55).
 pub mod geometry {

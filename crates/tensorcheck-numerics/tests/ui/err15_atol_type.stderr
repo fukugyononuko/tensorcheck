@@ -1,0 +1,18 @@
+error[E0277]: the absolute tolerance must have the same type as the state
+ --> tests/ui/err15_atol_type.rs:8:66
+  |
+8 |     let _ = integrate(force, (0.0 * m)..(0.1 * m), GaussKronrod, Tolerance { rtol: 1e-12, atol: 1e-15 * m });
+  |             ---------                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ wrong type for `atol`
+  |             |
+  |             required by a bound introduced by this call
+  |
+  = help: the trait `ToleranceFor<Tensor<Dim<Si, Cons<Pos<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>>, Cons<Pos<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>, Cons<tensorcheck::utility::typelevel::Neg<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>>, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Nil>>>>>>>>, Nil>>` is not implemented for `Tensor<Dim<Si, Cons<Pos<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Nil>>>>>>>>, Nil>`
+  = note: `atol` carries one tolerance per component, with the component's dimension
+note: required by a bound in `integrate`
+ --> src/quad.rs
+  |
+  | pub fn integrate<X, Y, F, A, M>(
+  |        --------- required by a bound in this function
+...
+  |     A: VectorSpace + ToleranceFor<<Y as TimesDim<X>>::Out>,
+  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `integrate`
