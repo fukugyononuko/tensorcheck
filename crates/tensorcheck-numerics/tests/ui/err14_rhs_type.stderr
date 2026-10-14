@@ -1,0 +1,23 @@
+error[E0277]: the right-hand side must return the state type divided by the time dimension
+ --> tests/ui/err14_rhs_type.rs:8:13
+  |
+8 |     let _ = solve_ivp(rhs, (0.0 * s)..(1.0 * s), 1.0 * m, DormandPrince54, Tolerance { rtol: 1e-6, atol: 1e-9 * m });
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ wrong return type for dy/dt
+  |
+  = note: for dy/dt = f(t, y), f must return a value whose dimension is [y]/[t]
+help: the trait `RhsReturns<Tensor<Dim<Si, Cons<Pos<S<Z>>, Cons<Zero, Cons<tensorcheck::utility::typelevel::Neg<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>, Cons<Zero, Cons<Zero, Cons<Zero, Cons<Zero, Nil>>>>>>>>, Nil, NoSym, Tensorial>>` is not implemented for `Tensor<Dim<Si, Cons<Pos<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Nil>>>>>>>>, Nil>`
+      but trait `RhsReturns<Tensor<Dim<Si, Cons<Pos<S<Z>>, Cons<Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<Zero, Cons<Zero, Cons<Zero, Cons<Zero, Nil>>>>>>>>, Nil, _, _>>` is implemented for it
+ --> $WORKSPACE/crates/tensorcheck/src/manager/tensor.rs
+  |
+  | / impl<D, S: Slots, Sym1, Sym2, K1, K2> RhsReturns<Tensor<D, S, Sym2, K2, f64>>
+  | |     for Tensor<D, S, Sym1, K1, f64>
+  | |___________________________________^
+  = help: for that trait implementation, expected `tensorcheck::utility::typelevel::Zero`, found `tensorcheck::utility::typelevel::Neg<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>`
+note: required by a bound in `solve_ivp`
+ --> src/ode.rs
+  |
+  | pub fn solve_ivp<T, Y, R, F, A, M>(
+  |        --------- required by a bound in this function
+...
+  |     R: VectorSpace + RhsReturns<<Y as PerDim<T>>::Out>,
+  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `solve_ivp`

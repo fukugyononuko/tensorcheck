@@ -205,5 +205,7 @@ impl<Y> ToleranceFor<Decoy<Y>> for Y {}
     note = "for dy/dt = f(t, y), f must return a value whose dimension is [y]/[t]"
 )]
 pub trait RhsReturns<R> {}
-impl<R> RhsReturns<R> for R {}
 impl<R> RhsReturns<Decoy<R>> for R {}
+// Implemented in the tensor manager for tensors (same dimension and slots; any
+// symmetry and tensoriality, since the coordinate derivative of components is not
+// a tensor in general) and element-wise for tuples.

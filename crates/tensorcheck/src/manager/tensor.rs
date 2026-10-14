@@ -22,6 +22,7 @@ use crate::engine::index::{
 use crate::engine::index::{Here, There};
 use crate::engine::metric::{Metric, inverse_at, metric_at};
 use crate::engine::symmetry::{Antisymmetric, NoSym, Symmetric};
+use crate::utility::diagnostics::RhsReturns;
 use crate::utility::diagnostics::{ComponentDimIs, SameSlot};
 use crate::utility::diagnostics::{CoordOf, IsTensor, LabelCount, MetricOn, VarianceIs};
 use crate::utility::diagnostics::{SameDimension, SameKind, SameSlots, SameSymmetry, UnitMatches};
@@ -802,3 +803,20 @@ where
 {
     type Out = Vector<Quot<<C::Space as Space>::RefDim, Dt>, C>;
 }
+
+/// The right-hand side of an ODE may return a tensor with the derivative's
+/// dimension and slots and any symmetry or tensoriality (ERR-14).
+impl<D, S: Slots, Sym1, Sym2, K1, K2> RhsReturns<Tensor<D, S, Sym2, K2, f64>>
+    for Tensor<D, S, Sym1, K1, f64>
+{
+}
+macro_rules! rhs_tuple {
+    ($($r:ident $t:ident),+) => {
+        impl<$($r: RhsReturns<$t>, $t),+> RhsReturns<($($t,)+)> for ($($r,)+) {}
+    };
+}
+rhs_tuple!(R0 T0, R1 T1);
+rhs_tuple!(R0 T0, R1 T1, R2 T2);
+rhs_tuple!(R0 T0, R1 T1, R2 T2, R3 T3);
+rhs_tuple!(R0 T0, R1 T1, R2 T2, R3 T3, R4 T4);
+rhs_tuple!(R0 T0, R1 T1, R2 T2, R3 T3, R4 T4, R5 T5);

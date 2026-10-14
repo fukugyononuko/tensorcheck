@@ -85,7 +85,7 @@
 | API-41 | （廃止）`ode::solve_second_order` | 2 階の方程式は、状態を $`(x, \dot{x})`$ の組にして `solve_ivp` で解く。シンプレクティック法は将来（FR-29） |
 | API-42 | `ode::{Rk4 { h }, DormandPrince54, Rosenbrock { jacobian }}` | 解法。`Rosenbrock` の `jacobian` は `Jacobian::Numerical` か、利用者の関数 |
 | API-43 | `ode::Tolerance { rtol, atol }` | 許容値。`rtol` は無次元の数、`atol` は状態と同じ型 |
-| API-44 | `ode::Solution { t, y, stats }`、`ode::SolveError` | 解と、失敗（`MaxSteps`、`StepTooSmall`、`NonFinite`）。失敗には起きた時刻を含める |
+| API-44 | `ode::Solution { t, y, stats }`、`ode::SolveError` | 解と、失敗（`MaxSteps`、`StepTooSmall`、`NonFinite`、`Singular`）。`e.time()` で失敗した時刻を取り出せる |
 | API-45 | `ode::solve_ivp_with(f, ..., on_step)` | 受け入れた各歩で呼ばれる関数を渡す（途中の値を記録するため） |
 | API-46 | `quad::integrate(f, a..b, method, tol)` | 定積分 $`\int_a^b f(x)\,dx`$。結果の型は `<Y as VectorSpace>::Times<X>`（$`[f]\,[x]`$） |
 | API-47 | `quad::{Trapezoid { n }, Simpson { n }, Romberg, GaussLegendre { n }, GaussKronrod}`、`quad::Tolerance { rtol, atol }` | 解法と許容値。`GaussKronrod` は適応型（7 点 Gauss、15 点 Kronrod）。`atol` は結果と同じ型 |

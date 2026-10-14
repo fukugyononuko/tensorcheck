@@ -7,4 +7,5 @@
 
 mod engine;
 mod manager;
+pub mod ode;
 pub mod quad;

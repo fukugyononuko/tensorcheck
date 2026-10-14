@@ -1,8 +1,5 @@
 //! Error norms and step-size control (CMP-E06, DD-13).
 
-// The step-size functions are used by the ODE solver (implementation phase 7).
-#![allow(dead_code)]
-
 /// Hairer's weighted RMS norm of an error estimate:
 /// `sqrt(mean((e_i / (atol_i + rtol · max(|y_i|, |y'_i|)))²))`.
 pub fn rms_norm(err: &[f64], y_old: &[f64], y_new: &[f64], atol: &[f64], rtol: f64) -> f64 {
