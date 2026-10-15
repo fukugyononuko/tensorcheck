@@ -28,7 +28,8 @@ use crate::manager::solver;
 /// units of the independent variable). No error control.
 #[derive(Clone, Copy, Debug)]
 pub struct Rk4 {
-    /// Step size in base units.
+    /// Step size in base units: a finite positive magnitude (else
+    /// [`SolveError::InvalidStep`]). The direction comes from the interval.
     pub h: f64,
 }
 /// Dormand–Prince 5(4): explicit, adaptive step size, for non-stiff problems.
@@ -120,6 +121,15 @@ pub enum SolveError<T> {
         /// Time reached.
         t: Quantity<T>,
     },
+    /// The tolerance is outside its domain (see [`Tolerance`]); nothing was evaluated.
+    InvalidTolerance,
+    /// The fixed step of [`Rk4`] is not finite and positive; nothing was evaluated.
+    InvalidStep {
+        /// The step given, in base units.
+        h: f64,
+    },
+    /// An end of the interval is NaN or infinite; nothing was evaluated.
+    InvalidSpan,
 }
 impl<T> fmt::Display for SolveError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -128,6 +138,18 @@ impl<T> fmt::Display for SolveError<T> {
             SolveError::StepTooSmall { t, .. } => ("step size too small", t.base_value()),
             SolveError::NonFinite { t } => ("non-finite value", t.base_value()),
             SolveError::Singular { t } => ("singular linear system", t.base_value()),
+            SolveError::InvalidTolerance => {
+                return f.write_str(
+                    "invalid tolerance (rtol and atol must be finite and nonnegative, not both zero)",
+                );
+            }
+            SolveError::InvalidStep { h } => {
+                return write!(
+                    f,
+                    "invalid fixed step h = {h:e} (must be finite and positive)"
+                );
+            }
+            SolveError::InvalidSpan => return f.write_str("the time interval is not finite"),
         };
         write!(f, "{what} at t = {t:e} (base units)")
     }
@@ -149,6 +171,9 @@ impl<T> PartialEq for SolveError<T> {
             (SolveError::StepTooSmall { t: a, h: x }, SolveError::StepTooSmall { t: b, h: y }) => {
                 a.base_value() == b.base_value() && x == y
             }
+            (SolveError::InvalidTolerance, SolveError::InvalidTolerance)
+            | (SolveError::InvalidSpan, SolveError::InvalidSpan) => true,
+            (SolveError::InvalidStep { h: x }, SolveError::InvalidStep { h: y }) => x == y,
             _ => false,
         }
     }
@@ -161,13 +186,17 @@ impl<T> fmt::Debug for SolveError<T> {
 impl<T> std::error::Error for SolveError<T> {}
 
 impl<T> SolveError<T> {
-    /// The time at which the solve failed.
-    pub fn time(&self) -> Quantity<T> {
+    /// The time at which the solve failed; `None` when the input was rejected before
+    /// the solve started.
+    pub fn time(&self) -> Option<Quantity<T>> {
         match *self {
             SolveError::MaxSteps { t }
             | SolveError::NonFinite { t }
-            | SolveError::Singular { t } => t,
-            SolveError::StepTooSmall { t, .. } => t,
+            | SolveError::Singular { t } => Some(t),
+            SolveError::StepTooSmall { t, .. } => Some(t),
+            SolveError::InvalidTolerance
+            | SolveError::InvalidStep { .. }
+            | SolveError::InvalidSpan => None,
         }
     }
 }
@@ -198,6 +227,12 @@ pub const MAX_STEPS: usize = 100_000;
 /// Solves `dy/dt = f(t, y)` from `span.start` to `span.end` (which may be earlier)
 /// (API-40). `f` must return the state type divided by the time dimension (ERR-14)
 /// and `atol` must have the state type (ERR-15).
+///
+/// Before `f` is called, the interval must be finite ([`SolveError::InvalidSpan`]),
+/// the tolerance in its domain ([`SolveError::InvalidTolerance`], see
+/// [`Tolerance`]), the step of [`Rk4`] finite and positive
+/// ([`SolveError::InvalidStep`]) and `y0` finite ([`SolveError::NonFinite`] at the
+/// start time).
 pub fn solve_ivp<T, Y, R, F, A, M>(
     f: F,
     span: Range<Quantity<T>>,
@@ -224,6 +259,7 @@ where
 }
 
 /// Like [`solve_ivp`], calling `on_step(t, &y)` after every accepted step (API-45).
+/// Rejected input (see [`solve_ivp`]) calls neither `f` nor `on_step`.
 pub fn solve_ivp_with<T, Y, R, F, A, M, O>(
     f: F,
     span: Range<Quantity<T>>,

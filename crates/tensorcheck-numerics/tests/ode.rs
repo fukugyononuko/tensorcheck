@@ -202,7 +202,7 @@ fn failures_carry_the_time() {
         ),
         "{e}"
     );
-    let tf = e.time().value_in(s);
+    let tf = e.time().expect("a solve failure has a time").value_in(s);
     assert!((tf - 1.0).abs() < 1e-3, "failed at t = {tf}");
 
     // MaxSteps: a fixed step far too small for the interval.

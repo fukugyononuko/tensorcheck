@@ -229,3 +229,53 @@ fn atan2_derivatives_in_every_quadrant() {
         assert!(rel(t.second(0, 0), 2.0 * x0 * y0 / (r2 * r2)) <= 16.0 * f64::EPSILON);
     }
 }
+
+/// Every component of a `Dual2` of the plane (value, 2 first and 3 second derivatives).
+fn parts2(v: D2) -> [f64; 6] {
+    [
+        v.re(),
+        v.d[0],
+        v.d[1],
+        v.second(0, 0),
+        v.second(0, 1),
+        v.second(1, 1),
+    ]
+}
+
+#[test]
+fn powers_zero_and_one_are_regular_at_zero() {
+    // TC-U09 (Codex review 2026-10-14, finding 2). x^0 = 1 and x^1 = x are smooth,
+    // but the general chain-rule formulas evaluate 0 · 0^-1 at x = 0 and gave NaN.
+    // The input is x(u, v) = u at u = 0 with ∂_v x = 0 too, so every component counts.
+    let x2 = D2::variable(0.0, 0);
+    let one = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let same = parts2(x2);
+    assert_eq!(parts2(x2.powi(0)), one);
+    assert_eq!(parts2(x2.powi(1)), same);
+    assert_eq!(parts2(x2.powf(0.0)), one);
+    assert_eq!(parts2(x2.powf(1.0)), same);
+    let x1 = Dual::<Plane>::variable(0.0, 0);
+    for (got, want) in [
+        (x1.powi(0), [1.0, 0.0, 0.0]),
+        (x1.powi(1), [0.0, 1.0, 0.0]),
+        (x1.powf(0.0), [1.0, 0.0, 0.0]),
+        (x1.powf(1.0), [0.0, 1.0, 0.0]),
+    ] {
+        assert_eq!([got.re(), got.d[0], got.d[1]], want);
+    }
+    // x² at 0 was already regular and stays so; a negative power at 0 is singular.
+    assert_eq!(parts2(x2.powi(2)), [0.0, 0.0, 0.0, 2.0, 0.0, 0.0]);
+    assert!(!x2.powi(-1).re().is_finite());
+}
+
+#[test]
+fn powi_accepts_every_i32_exponent() {
+    // TC-U09: k − 1 and k − 2 overflowed i32 for k = i32::MIN (a panic in debug builds).
+    // At x = 1 every power is 1, the derivatives are k and k (k − 1).
+    let k = i32::MIN;
+    let v = D2::variable(1.0, 0).powi(k);
+    let kf = k as f64;
+    assert_eq!(parts2(v), [1.0, kf, 0.0, kf * (kf - 1.0), 0.0, 0.0]);
+    let v = D2::variable(1.0, 0).powi(i32::MIN + 1);
+    assert_eq!(v.re(), 1.0);
+}

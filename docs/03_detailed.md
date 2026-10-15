@@ -54,16 +54,16 @@ crates/
       manager/   solver.rs                       M02
       engine/    ode_step.rs error_control.rs quadrature.rs  E05〜E07
     tests/  examples/  benches/
-scripts/  check_privacy.py check_workflows.py check_layers.py
+scripts/  check_privacy.py check_workflows.py check_layers.py test_check_layers.py
 ```
 
 - 層をまたいで共有する型（空間・座標系・枠・ラベル・点・テンソル性の印・枠の位置の印、フェーズ 5 からはテンソルの型 `Tensor` とその基本の作り方、対称性の印）は `src/contracts.rs` に置く。M03 も M01 もテンソルを作って返すので、テンソルの型を M01 に置くと Manager どうしの参照になるため。処理は持たない。Engine どうしが互いを参照せずに同じ型を使うため（The Method で、層の間のデータの契約を別にまとめるのと同じ）。どの層からも使えるが、契約自身は `access/`・`utility/` だけを使う（フェーズ 3 で追加）。
 - 層ごとにディレクトリを分ける。層の外に見せる項目は `pub(crate)`、クレートの外に見せる項目だけを `pub` にする。
-- `scripts/check_layers.py`（NFR-11）は、各ファイルの `use crate::…` と `tensorcheck::internal::…` を読み、01 §1.7 の表に反しないかを検査する。
+- `scripts/check_layers.py`（NFR-11）は、各ファイルのパスを読み、01 §1.7 の表に反しないかを検査する。実装での補足（Codex のレビュー 2026-10-14）：最初の版は `crate::manager::…` の形の正規表現だけを見ていたので、まとめた use（`use crate::{manager::x};`）、モジュールを use してからの相対の呼び出し、`self`・`super`、別名、再公開（`crate::Tensor`）を見逃した。いまは字句に分け（コメントと文字列を除く）、use の木・子モジュール・glob・層の外のモジュールでの再公開をたどって名前を解決してから判定する。中身を決められない層の glob（`use crate::engine::*;`）は違反とする。すり抜けの書き方を 1 つずつ置いた例（`scripts/fixtures/layers_bad`）と正しい書き方の例（`layers_good`）を `scripts/test_check_layers.py` で確かめる。構文解析器（`syn`）は使わない（実行時の依存を持たない方針（TC-A03）を、検査の道具にも当てはめるため）。
   - `manager/` は `engine/`・`access/`・`utility/` だけを使う。ほかの `manager/` を使わない。
   - `engine/` は `access/`・`utility/` だけを使う。ほかの `engine/` のファイルを使わない。拡張点の trait（EXT）は各 Engine のファイルに置く。
   - `access/` は `utility/` だけを使う。`utility/` は `utility/` だけを使う。
-  - `internal` は 2 つに分ける（フェーズ 8）。`internal::engine`（E08）を使ってよいのは `tensorcheck-numerics/src/manager/` だけ。`internal::utility`（U04）は numerics のどの層からも使える（Engine → Utility は許されるため）。`examples/` と `tests/` はどちらも使わない。
+  - `internal` は 2 つに分ける（フェーズ 8）。`internal::engine`（E08）を使ってよいのは `tensorcheck-numerics/src/manager/` だけ（公開のパス `tensorcheck::engine::…` も同じ扱い）。`internal::utility`（U04）は numerics のどの層からも使える（Engine → Utility は許されるため）。`examples/` と `tests/` はどちらも使わない。
 - `#![forbid(unsafe_code)]` を両方のクレートの `lib.rs` に置く（NFR-12）。
 
 ## 3.2 DD-02 型レベルの整数・真偽・並び（U01）
@@ -279,7 +279,8 @@ pub trait ChartTransform {               // EXT-05
 | 5 以上 | 部分ピボット選択つき LU 分解。単位行列を右辺として解く |
 
 - 方式は `Space::N`（定数）で選ぶ。`match` の分岐は定数なので、最適化で消える。
-- 正則でないことの判定：Hadamard の不等式 $`\lvert \det A \rvert \le \prod_i \lVert a_i \rVert`$（$`a_i`$ は行）から、比 $`\rho = \lvert \det A \rvert / \prod_i \lVert a_i \rVert \in [0, 1]`$ は行の大きさによらない。$`\rho < n\,\varepsilon`$（$`\varepsilon`$ は `f64` の計算機イプシロン）のとき、数値的に正則でないとして `Singular` を返す。LU 分解ではピボットの絶対値を、その列の最大値と比べて同じ基準で判定する。しきい値は 04 のテストで、正則に近い行列（条件数 $`10^{8}`$〜$`10^{15}`$）を使って確かめ、必要なら直す（決まり 12）。
+- 行の大きさをそろえる（Codex のレビュー 2026-10-14 で追加）：各行を、最大の成分に最も近い 2 のべき乗で割った $`B = DA`$ の逆行列を求め、$`A^{-1} = B^{-1}D`$ とする。2 のべき乗を掛けるのは丸めがないので、精度は変わらない。そろえないと、条件数 1 の $`\operatorname{diag}(10^{200}, 10^{200})`$ でも行列式が有限でなくなり（$`10^{-200}`$ では 0 になり）、`Singular` と判定していた。
+- 正則でないことの判定：Hadamard の不等式 $`\lvert \det A \rvert \le \prod_i \lVert a_i \rVert`$（$`a_i`$ は行）から、比 $`\rho = \lvert \det A \rvert / \prod_i \lVert a_i \rVert \in [0, 1]`$ は行の大きさによらない。$`\rho < n\,\varepsilon`$（$`\varepsilon`$ は `f64` の計算機イプシロン）のとき、数値的に正則でないとして `Singular` を返す。比は対数（$`\ln\lvert\det A\rvert - \sum_i \ln\lVert a_i \rVert`$）で求め、行のノルムも最大の成分で割ってから求めるので、途中で桁があふれない。LU 分解ではピボットの絶対値を、その列の最大値と比べて同じ基準で判定する。しきい値は 04 のテストで、正則に近い行列（条件数 $`10^{8}`$〜$`10^{15}`$）を使って確かめ、必要なら直す（決まり 12）。
 - 自動微分の数値の型でも同じ式を使う。判定は値の部分（`re`）だけで行う。
 
 ## 3.9 DD-09 数値の型と自動微分（U02、E08）
@@ -302,6 +303,7 @@ pub trait Scalar: Copy + Add<Output = Self> + Sub<…> + Mul<…> + Div<…> + N
 | `Dual<Sp>` | 値 $`v`$、1 階微分 $`\partial_c v`$（`Sp::Arr<f64>`） | Christoffel 記号、共変微分、Jacobi 行列 |
 | `Dual2<Sp>` | 値、1 階微分、2 階微分 $`\partial_c \partial_d v`$（`Sp::SymArr<f64>`） | Riemann テンソル |
 
+- `powi(0)`・`powf(0.0)` は定数 1、`powi(1)`・`powf(1.0)` は入力そのものを返す（Codex のレビュー 2026-10-14）。一般の式は $`x = 0`$ で $`0 \cdot 0^{-1}`$ を計算し、滑らかな関数なのに NaN になっていた。`powi` の $`k - 1`$、$`k - 2`$ は `i64` で計算し、`i32` に入らないとき（$`k`$ が `i32::MIN` の近く）は同じ整数の指数で `powf` を使う。
 - 演算は連鎖律で実装する。例：$`f(v)`$ の 2 階微分は $`\partial_c\partial_d f = f''(v)\,\partial_c v\,\partial_d v + f'(v)\,\partial_c\partial_d v`$。
 - 数学関数は std の `f64` のものを使う（NFR-01）。
 - E08 `gradient(場, 点)`：点の各座標 $`x^c`$ を、値 $`x^c`$・1 階微分 $`e_c`$（$`c`$ 番目だけ 1）の `Dual` にして場を 1 回評価する。`hessian` は `Dual2` で同様に 1 回評価する（2 階微分の初期値は 0）。
@@ -367,7 +369,8 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 - 入口は `solve_ivp` だけで、2 階専用の解法は持たない（FR-18）。シンプレクティック法は将来（FR-29）。
 - 係数は、出典の表をそのまま定数として書き、出典をコメントに書く。
 - Rosenbrock 法の 1 歩：$`E = I/(h\gamma) - J`$ を 1 回 LU 分解し（U04）、6 つの段の線形方程式を同じ分解で解く。最後の段の増分が誤差の見積もり。$`J`$ と $`\partial f/\partial t`$ は中心差分（DD-15）で求める（利用者が与える形は FR-30）。実装での補足（フェーズ 8）：$`J`$ が固有値 0 を持つ問題（保存量がある ROBER など）では、$`h`$ が大きいと $`E`$ の条件数が大きくなり、DD-08 の判定（$`\rho < n\varepsilon`$）では誤って正則でないとされた。硬い方程式では、Hairer の元のプログラムと同じく、ピボットが厳密に 0 か有限でないときだけ失敗にする（`lu_decompose_with(…, false)`）。
-- 時間の向きは負でもよい（$`t_1 < t_0`$）。
+- 時間の向きは負でもよい（$`t_1 < t_0`$）。`Rk4 { h }` の `h` は正の大きさで、向きは区間から決める。
+- 入力の検査（Codex のレビュー 2026-10-14 で追加）。右辺を評価する前に、次の順で確かめる：区間の両端が有限（`InvalidSpan`）、許容値（DD-13、`InvalidTolerance`）、`Rk4` の `h` が有限で正（`InvalidStep`。0 では時刻が進まず、負では終点から離れ、どちらも 100,000 歩を回して `MaxSteps` になっていた。絶対値を取って直すことはしない）、$`y_0`$ が有限（`NonFinite`、時刻は $`t_0`$。長さ 0 の区間でも、有限でない状態を解として返さない）。
 - `solve_ivp_with` の `on_step` は、受け入れた各歩の $`(t, y)`$ を受け取る。密出力（任意の時刻の値の補間）は将来。
 - 実装での補足（フェーズ 9、性能）：右辺と `on_step` は、動的な呼び出し（`dyn FnMut`）ではなく型引数で受け取る。インライン展開を妨げないため（RK4 の比が 2.75 から 2.19 になった）。
 
@@ -381,6 +384,7 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 
   $`\mathrm{atol}_i`$ は、状態と同じ型の `atol` を `to_raw` した値なので、成分ごとに次元が合っている。
 - 受け入れ：$`\mathrm{err} \le 1`$。
+- 許容値の定義域（Codex のレビュー 2026-10-14 で追加）：`rtol` と `atol` のすべての成分が有限で 0 以上。さらに、成分ごとに `atol` と `rtol` の少なくとも一方が正（両方 0 の成分は、どんな誤差とも比べられない）。外れたら、評価の前に `InvalidTolerance` を返す（常微分方程式と定積分で同じ）。負の値を許していたときは、正規化した誤差が負になり、`max_norm` が 0 と判定して、誤差によらず受け入れていた。
 - 次の刻み：$`h_\mathrm{new} = h \cdot \min(f_\mathrm{max}, \max(f_\mathrm{min}, 0.9\,\mathrm{err}^{-1/(q+1)}))`$。$`q`$ は埋め込み公式の低いほうの次数。$`f_\mathrm{max} = 5`$、$`f_\mathrm{min} = 0.2`$。直前の歩を棄却したときは $`f_\mathrm{max} = 1`$。PI 制御は将来（VOL-08）。
 - 最初の刻み：Hairer らの初期刻みの推定（右辺を 2 回評価する）。
 - 失敗：歩数が上限（既定 100,000）を超えたら `MaxSteps`。$`\lvert h \rvert < 16\,\varepsilon\,\lvert t \rvert`$ になったら `StepTooSmall`。値が有限でなくなったら `NonFinite`。
@@ -397,6 +401,7 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 | `GaussKronrod` | 7 点 Gauss・15 点 Kronrod（節点と重みは QUADPACK の値）の適応型 | Gauss と Kronrod の差（QUADPACK の補正式） |
 
 - 被積分関数の値は `VectorSpace` の型でよい（ベクトル値の積分）。結果は `Y::Times<X>`。
+- 入力の検査（Codex のレビュー 2026-10-14 で追加）。被積分関数を評価する前に、許容値（DD-13、`InvalidTolerance`）、固定の公式の数（`InvalidCount`。0 と、細かいほうの数 $`2n`$・偶数に切り上げた $`n`$・$`n + 1`$ が `usize` からあふれる数）、区間の両端が有限（`InvalidRange`）を確かめる。
 
 ## 3.15 DD-15 差分による数値微分（E08）
 
@@ -442,12 +447,15 @@ ERR ごとに専用の trait を 1 つ置き、`#[diagnostic::on_unimplemented]`
 ## 3.17 DD-17 失敗の型（M02、U04）
 
 ```rust
-pub enum SolveError<T> { MaxSteps { t: T }, StepTooSmall { t: T, h: T }, NonFinite { t: T }, Singular { t: T } }
-pub enum QuadError { ToleranceNotMet { estimate_error: f64 }, NonFinite }
+pub enum SolveError<T> { MaxSteps { t: T }, StepTooSmall { t: T, h: T }, NonFinite { t: T }, Singular { t: T },
+                        InvalidTolerance, InvalidStep { h: f64 }, InvalidSpan }
+pub enum QuadError { ToleranceNotMet { estimate_error: f64 }, NonFinite,
+                     InvalidTolerance, InvalidCount { n: usize }, InvalidRange }
 pub enum LinearError { Singular }
 ```
 
 - `T` は時間の型（`Quantity`）。失敗した時刻を、利用者の単位で取り出せる。
+- `Invalid…` は、入力が定義域の外で、何も評価せずに返す失敗（Codex のレビュー 2026-10-14 で追加）。解き始めていないので時刻を持たず、`time()` は `Option` を返す（入力の誤りを `NonFinite` や `ToleranceNotMet` に混ぜない）。
 - `core::error::Error` と `Display` を実装する。メッセージは英語（NFR-07）。
 - 幾何の操作（M03）で計量テンソルが正則でないときは、`Result<_, LinearError>` を返す。
 

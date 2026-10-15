@@ -26,6 +26,14 @@ pub fn max_norm(err: &[f64], value: &[f64], atol: &[f64], rtol: f64) -> f64 {
         .fold(0.0, f64::max)
 }
 
+/// Whether a tolerance can control the error (DD-13): `rtol` and every `atol_i` are
+/// finite and nonnegative, and no component has both zero (its scale
+/// `atol_i + rtol · |y_i|` would be zero for every `y_i` when `rtol` is zero).
+pub fn valid_tolerance(rtol: f64, atol: &[f64]) -> bool {
+    let nonneg = |x: f64| x.is_finite() && x >= 0.0;
+    nonneg(rtol) && atol.iter().all(|&a| nonneg(a) && (a > 0.0 || rtol > 0.0))
+}
+
 /// Accept the step if the scaled error is at most one.
 pub fn judge(err: f64) -> bool {
     err <= 1.0
@@ -94,6 +102,22 @@ mod tests {
             }
         }
         assert_eq!(next_step(2.0, 1.0, 4, false), 2.0 * SAFETY);
+    }
+
+    #[test]
+    fn tolerance_domain() {
+        // Codex review 2026-10-14, finding 3: a negative scale made the scaled error
+        // negative, and max_norm then reported 0 (accepted) whatever the error.
+        assert!(valid_tolerance(1e-6, &[1e-9, 0.0]));
+        assert!(valid_tolerance(0.0, &[1e-9, 1e-9]));
+        for rtol in [-1e-6, f64::NAN, f64::INFINITY] {
+            assert!(!valid_tolerance(rtol, &[1e-9]), "{rtol}");
+        }
+        for atol in [-1e-9, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(!valid_tolerance(1e-6, &[1e-9, atol]), "{atol}");
+        }
+        // Both zero for a component: nothing to compare the error with.
+        assert!(!valid_tolerance(0.0, &[1e-9, 0.0]));
     }
 
     #[test]

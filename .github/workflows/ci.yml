@@ -23,8 +23,9 @@ jobs:
       - name: Check layers and unsafe (TC-A01, TC-A02)
         run: |
           python3 scripts/check_layers.py
-          # The check must catch violations: the fixture breaks the rules on purpose.
-          ! python3 scripts/check_layers.py scripts/fixtures/layers_bad
+          # The check must catch every violation in the fixtures (one bypass form per
+          # file) and accept the valid forms.
+          python3 scripts/test_check_layers.py
       - name: Check runtime dependencies (TC-A03, TC-A04)
         run: python3 scripts/check_deps.py
       - name: Check English (TC-N05)

@@ -93,6 +93,91 @@ fn singular_matrices_are_rejected() {
 }
 
 #[test]
+fn inverse_does_not_depend_on_the_scale() {
+    // TC-U07: the singularity test and the inverse work at any scale (Codex review
+    // 2026-10-14, finding 1). With the old test the determinant and the product of
+    // the row norms overflowed (1e200) or underflowed (1e-200), and every one of
+    // these well-conditioned matrices was rejected.
+    let residual = |am: &[f64], inv: &[f64], n: usize| {
+        let mut worst: f64 = 0.0;
+        for i in 0..n {
+            let mut row = 0.0;
+            for j in 0..n {
+                // A A⁻¹ is of order one whatever the scale of A, so this cannot overflow.
+                let sum: f64 = (0..n).map(|k| am[i * n + k] * inv[k * n + j]).sum();
+                row += (sum - if i == j { 1.0 } else { 0.0 }).abs();
+            }
+            worst = worst.max(row);
+        }
+        worst
+    };
+    for n in 1..=6 {
+        for &scale in &[1e200, 1e-200, 1e300, 1e-300] {
+            // A diagonal matrix: condition number 1, so only a few roundings (det, a/det).
+            let mut am = vec![0.0; n * n];
+            for i in 0..n {
+                am[i * n + i] = scale;
+            }
+            let mut inv = vec![0.0; n * n];
+            inverse(&am, n, &mut inv).unwrap_or_else(|e| panic!("n={n} scale={scale}: {e}"));
+            for i in 0..n {
+                let r = rel(inv[i * n + i], 1.0 / scale);
+                assert!(r <= 4.0 * f64::EPSILON, "n={n} scale={scale} rel={r}");
+            }
+            // A general well-conditioned matrix, scaled.
+            let base = mat(n, 3);
+            let am: Vec<f64> = base.iter().map(|x| x * scale).collect();
+            let mut inv = vec![0.0; n * n];
+            inverse(&am, n, &mut inv).unwrap_or_else(|e| panic!("n={n} scale={scale}: {e}"));
+            let kappa = norm_inf(&am, n) * norm_inf(&inv, n);
+            let r = residual(&am, &inv, n);
+            assert!(
+                r <= 10.0 * n as f64 * kappa * f64::EPSILON,
+                "n={n} scale={scale} residual={r}"
+            );
+            // Exactly singular stays singular at any scale.
+            if n >= 2 {
+                let mut am = am.clone();
+                for j in 0..n {
+                    am[(n - 1) * n + j] = am[j];
+                }
+                assert_eq!(
+                    inverse(&am, n, &mut inv),
+                    Err(LinearError::Singular),
+                    "n={n} scale={scale}"
+                );
+            }
+        }
+        // Rows of very different scales (the Hadamard ratio does not see row scales).
+        let row_scale = |i: usize| if i.is_multiple_of(2) { 1e150 } else { 1e-150 };
+        let base = mat(n, 5);
+        let am: Vec<f64> = base
+            .iter()
+            .enumerate()
+            .map(|(k, x)| x * row_scale(k / n))
+            .collect();
+        let mut inv = vec![0.0; n * n];
+        inverse(&am, n, &mut inv).unwrap_or_else(|e| panic!("n={n} mixed rows: {e}"));
+        // A A⁻¹ − I is not scale free here (off-diagonal terms are 1e300 times their
+        // difference), so check the equilibrated problem: (D A)(A⁻¹ D⁻¹) − I with
+        // D A = base, whose condition number is that of `base`.
+        let inv_eq: Vec<f64> = inv
+            .iter()
+            .enumerate()
+            .map(|(k, x)| x * row_scale(k % n))
+            .collect();
+        let mut base_inv = vec![0.0; n * n];
+        inverse(&base, n, &mut base_inv).unwrap();
+        let kappa = norm_inf(&base, n) * norm_inf(&base_inv, n);
+        let r = residual(&base, &inv_eq, n);
+        assert!(
+            r <= 10.0 * n as f64 * kappa * f64::EPSILON,
+            "n={n} mixed rows residual={r}"
+        );
+    }
+}
+
+#[test]
 fn polar_cartesian_round_trip() {
     // TC-U08. Error budget: a few trigonometric evaluations and products,
     // each within 1 ulp; we allow 10 ε relative.

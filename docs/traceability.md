@@ -256,7 +256,7 @@ flowchart LR
 | FR-19 硬い常微分方程式 | TC-U25, TC-E05 |
 | FR-20 定積分 | TC-U21, TC-U22, TC-I07, TC-E06 |
 | FR-21 数値微分 | TC-U26 |
-| FR-22 誤差の許容値と失敗の知らせ | TC-U20, TC-U27 |
+| FR-22 誤差の許容値と失敗の知らせ | TC-U20, TC-U27, TC-U28 |
 | FR-25 テンソル場 | TC-U12 |
 | FR-26 Christoffel 記号 | TC-U10, TC-U14, TC-F16, TC-F17, TC-F20 |
 | FR-27 曲率 | TC-U11, TC-U14, TC-U15, TC-U16, TC-I08, TC-E07 |
