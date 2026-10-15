@@ -88,7 +88,9 @@ fn main() {
         worst = worst.max((defl - second).abs() / second);
     }
     println!("largest relative difference with the second-order term: {worst:.1e}");
-    // The rest is the third-order term and starting the ray at a finite distance.
+    // The rest is the error of the ODE solve: it scales with rtol (1e-11: 2e-6,
+    // 1e-12: 1.6e-7, 1e-13: 7e-9) and hardly changes when the ray starts ten times
+    // farther away. The third-order term is about 1e-11 and plays no part.
     assert!(worst < 1e-6);
 
     // Near a black hole (impact parameters 2.7 r_s to 8 r_s) the same equation
