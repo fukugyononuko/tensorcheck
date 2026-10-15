@@ -28,21 +28,72 @@ impl std::error::Error for LinearError {}
 /// Whether `|det A| / ∏ ‖row_i‖` is below `n ε` (DD-08).
 ///
 /// By Hadamard's inequality the ratio lies in `[0, 1]` whatever the scale of the
-/// rows, so a fixed threshold works for every matrix.
-fn nearly_singular<N: Scalar>(a: &[N], n: usize, det: f64) -> bool {
-    let mut prod = 1.0;
+/// rows, so a fixed threshold works for every matrix. The ratio is formed from
+/// logarithms, so neither the determinant nor the product of the row norms has to
+/// be representable: `log_det` is `ln |det A|`.
+fn nearly_singular<N: Scalar>(a: &[N], n: usize, log_det: f64) -> bool {
+    let mut log_prod = 0.0;
     for i in 0..n {
-        let norm: f64 = (0..n)
-            .map(|j| a[i * n + j].re().powi(2))
-            .sum::<f64>()
-            .sqrt();
-        if norm == 0.0 {
+        let norm = row_norm(a, n, i);
+        if norm == 0.0 || !norm.is_finite() {
             return true;
         }
-        prod *= norm;
+        log_prod += norm.ln();
     }
-    let ratio = det.abs() / prod;
-    !ratio.is_finite() || ratio < n as f64 * f64::EPSILON
+    let log_ratio = log_det - log_prod;
+    // A NaN ratio (from a non-finite entry) is singular too.
+    log_ratio.is_nan() || log_ratio < (n as f64 * f64::EPSILON).ln()
+}
+
+/// The Euclidean norm of row `i`, scaled by its largest entry so that the squares
+/// neither overflow nor underflow.
+fn row_norm<N: Scalar>(a: &[N], n: usize, i: usize) -> f64 {
+    let big = row_max(a, n, i);
+    if big == 0.0 || !big.is_finite() {
+        return big;
+    }
+    big * (0..n)
+        .map(|j| (a[i * n + j].re() / big).powi(2))
+        .sum::<f64>()
+        .sqrt()
+}
+
+/// The largest `|a_ij|` of row `i` (NaN if the row has one).
+fn row_max<N: Scalar>(a: &[N], n: usize, i: usize) -> f64 {
+    (0..n).fold(0.0, |m: f64, j| {
+        let x = a[i * n + j].re().abs();
+        if x.is_nan() || m.is_nan() {
+            f64::NAN
+        } else {
+            m.max(x)
+        }
+    })
+}
+
+/// Fills `d` with `2^-e`, `2^e` the power of two nearest the largest entry of each
+/// row, and `b` with `D A`, whose entries are then of order one. Multiplying by a
+/// power of two is exact, so `A^{-1} = (D A)^{-1} D` loses nothing to the scaling.
+/// Fails if a row is zero or not finite (DD-08).
+fn scale_rows<N: Scalar>(a: &[N], n: usize, d: &mut [f64], b: &mut [N]) -> Result<(), LinearError> {
+    for i in 0..n {
+        let big = row_max(a, n, i);
+        if big == 0.0 || !big.is_finite() {
+            return Err(LinearError::Singular);
+        }
+        // A subnormal row cannot reach order one: 2^1024 is not representable.
+        d[i] = pow2((-(big.log2().round() as i32)).min(f64::MAX_EXP - 1));
+        for j in 0..n {
+            b[i * n + j] = a[i * n + j].scale(d[i]);
+        }
+    }
+    Ok(())
+}
+
+/// `2^k` for `-1074 <= k <= 1023`, exactly (subnormal powers included).
+fn pow2(k: i32) -> f64 {
+    // Split the exponent so that each half is a normal number.
+    let half = k / 2;
+    2f64.powi(half) * 2f64.powi(k - half)
 }
 
 #[inline(always)]
@@ -51,11 +102,36 @@ fn det2<N: Scalar>(a: N, b: N, c: N, d: N) -> N {
 }
 
 /// Writes the inverse of the `n × n` matrix `a` into `out`.
+///
+/// The rows are first scaled by powers of two (exactly) to entries of order one, so
+/// that a well-conditioned matrix is inverted whatever its scale (DD-08).
 pub fn inverse<N: Scalar>(a: &[N], n: usize, out: &mut [N]) -> Result<(), LinearError> {
     debug_assert_eq!(a.len(), n * n);
     debug_assert_eq!(out.len(), n * n);
+    if n == 0 {
+        return Ok(());
+    }
+    // Small sizes (every space of the library) stay on the stack.
+    let (mut d_small, mut b_small) = ([0.0; 4], [N::zero(); 16]);
+    let (mut d_big, mut b_big) = (Vec::new(), Vec::new());
+    let (d, b) = if n <= 4 {
+        (&mut d_small[..n], &mut b_small[..n * n])
+    } else {
+        d_big.resize(n, 0.0);
+        b_big.resize(n * n, N::zero());
+        (&mut d_big[..], &mut b_big[..])
+    };
+    scale_rows(a, n, d, b)?;
+    inverse_unscaled(b, n, out)?;
+    // A^{-1} = B^{-1} D: column j of B^{-1} times d_j.
+    for (k, o) in out.iter_mut().enumerate() {
+        *o = o.scale(d[k % n]);
+    }
+    Ok(())
+}
+
+fn inverse_unscaled<N: Scalar>(a: &[N], n: usize, out: &mut [N]) -> Result<(), LinearError> {
     match n {
-        0 => Ok(()),
         1 => {
             if a[0].re() == 0.0 || !a[0].re().is_finite() {
                 return Err(LinearError::Singular);
@@ -65,7 +141,7 @@ pub fn inverse<N: Scalar>(a: &[N], n: usize, out: &mut [N]) -> Result<(), Linear
         }
         2 => {
             let det = det2(a[0], a[1], a[2], a[3]);
-            if nearly_singular(a, 2, det.re()) {
+            if nearly_singular(a, 2, det.re().abs().ln()) {
                 return Err(LinearError::Singular);
             }
             out[0] = a[3] / det;
@@ -80,7 +156,7 @@ pub fn inverse<N: Scalar>(a: &[N], n: usize, out: &mut [N]) -> Result<(), Linear
             let c01 = -det2(m(1, 0), m(1, 2), m(2, 0), m(2, 2));
             let c02 = det2(m(1, 0), m(1, 1), m(2, 0), m(2, 1));
             let det = m(0, 0) * c00 + m(0, 1) * c01 + m(0, 2) * c02;
-            if nearly_singular(a, 3, det.re()) {
+            if nearly_singular(a, 3, det.re().abs().ln()) {
                 return Err(LinearError::Singular);
             }
             let c10 = -det2(m(0, 1), m(0, 2), m(2, 1), m(2, 2));
@@ -118,7 +194,7 @@ fn inverse4<N: Scalar>(a: &[N], out: &mut [N]) -> Result<(), LinearError> {
     let c1 = det2(m(2, 0), m(2, 2), m(3, 0), m(3, 2));
     let c0 = det2(m(2, 0), m(2, 1), m(3, 0), m(3, 1));
     let det = s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0;
-    if nearly_singular(a, 4, det.re()) {
+    if nearly_singular(a, 4, det.re().abs().ln()) {
         return Err(LinearError::Singular);
     }
     let inv = [
@@ -195,8 +271,8 @@ pub fn lu_decompose_with<N: Scalar>(
             }
         }
     }
-    let det: f64 = sign * (0..n).map(|i| lu[i * n + i].re()).product::<f64>();
-    if check_conditioning && nearly_singular(&original, n, det) {
+    let log_det: f64 = (0..n).map(|i| lu[i * n + i].re().abs().ln()).sum();
+    if check_conditioning && nearly_singular(&original, n, log_det) {
         return Err(LinearError::Singular);
     }
     Ok(sign)

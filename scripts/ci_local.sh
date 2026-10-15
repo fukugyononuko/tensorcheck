@@ -3,10 +3,7 @@
 set -eu
 python3 scripts/check_workflows.py
 python3 scripts/check_layers.py
-if python3 scripts/check_layers.py scripts/fixtures/layers_bad >/dev/null 2>&1; then
-  echo "check_layers が、わざと壊した例を見逃した" >&2
-  exit 1
-fi
+python3 scripts/test_check_layers.py
 python3 scripts/check_deps.py
 python3 scripts/check_english.py
 python3 scripts/check_math.py

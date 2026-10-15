@@ -326,16 +326,34 @@ macro_rules! scalar_impl {
                 out
             }
             fn powi(self, k: i32) -> Self {
+                // x^0 and x^1 directly: the general formulas multiply a zero
+                // coefficient by 0^-1 = ∞ at x = 0, which gives NaN.
+                match k {
+                    0 => return Self::constant(1.0),
+                    1 => return self,
+                    _ => {}
+                }
                 let x = self.re;
                 let kf = k as f64;
+                // k − 1 and k − 2 do not fit in i32 near i32::MIN; powf takes the
+                // same integral exponent there.
+                let pow =
+                    |j: i64| i32::try_from(j).map_or_else(|_| x.powf(j as f64), |j| x.powi(j));
                 $chain!(
                     self,
                     x.powi(k),
-                    kf * x.powi(k - 1),
-                    kf * (kf - 1.0) * x.powi(k - 2)
+                    kf * pow(i64::from(k) - 1),
+                    kf * (kf - 1.0) * pow(i64::from(k) - 2)
                 )
             }
             fn powf(self, p: f64) -> Self {
+                // As for powi: exponents 0 and 1 would give 0 · ∞ at x = 0.
+                if p == 0.0 {
+                    return Self::constant(1.0);
+                }
+                if p == 1.0 {
+                    return self;
+                }
                 let x = self.re;
                 $chain!(
                     self,

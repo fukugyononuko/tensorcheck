@@ -6,7 +6,9 @@ use core::ops::Range;
 
 use tensorcheck::{Quantity, TimesDim, VectorSpace};
 
-use crate::engine::error_control::{judge, max_norm, next_step, pick_interval, rms_norm};
+use crate::engine::error_control::{
+    judge, max_norm, next_step, pick_interval, rms_norm, valid_tolerance,
+};
 use crate::engine::ode_step::{RosenbrockWork, Work, dopri5_step, rk4, rodas_step};
 use crate::engine::quadrature::{gauss_kronrod15, gauss_legendre, romberg, simpson, trapezoid};
 use crate::ode::{Solution, SolveError, Stats};
@@ -42,6 +44,16 @@ where
     let m = Y::LEN;
     let (a, b) = (range.start.base_value(), range.end.base_value());
     let atol: Vec<f64> = (0..m).map(|i| atol.component(i)).collect();
+    // Input checks, before the integrand is evaluated (DD-13, DD-17).
+    if !valid_tolerance(rtol, &atol) {
+        return Err(QuadError::InvalidTolerance);
+    }
+    if let Some(n) = invalid_count(kind) {
+        return Err(QuadError::InvalidCount { n });
+    }
+    if !a.is_finite() || !b.is_finite() {
+        return Err(QuadError::InvalidRange);
+    }
     let evals = Cell::new(0usize);
     let finite = Cell::new(true);
     let mut g = |x: f64, out: &mut [f64]| {
@@ -133,6 +145,29 @@ where
     })
 }
 
+/// The count of a fixed rule if it is unsupported: zero, or so large that the
+/// refined rule's count (`2n` intervals, Simpson's even `n`, `n + 1` points)
+/// overflows (DD-14).
+fn invalid_count(kind: QuadKind) -> Option<usize> {
+    let ok = match kind {
+        QuadKind::Trapezoid(n) => n >= 1 && n.checked_mul(2).is_some(),
+        QuadKind::Simpson(n) => {
+            n >= 1
+                && n.checked_add(n % 2)
+                    .and_then(|e| e.checked_mul(2))
+                    .is_some()
+        }
+        QuadKind::GaussLegendre(n) => n >= 1 && n.checked_add(1).is_some(),
+        QuadKind::Romberg | QuadKind::GaussKronrod => true,
+    };
+    match kind {
+        QuadKind::Trapezoid(n) | QuadKind::Simpson(n) | QuadKind::GaussLegendre(n) if !ok => {
+            Some(n)
+        }
+        _ => None,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // ODEs (CC-07)
 
@@ -165,6 +200,24 @@ where
     let (t0, t1) = (span.start.base_value(), span.end.base_value());
     let dir = if t1 >= t0 { 1.0 } else { -1.0 };
     let atol: Vec<f64> = (0..n).map(|i| atol.component(i)).collect();
+    // Input checks, before the right-hand side is evaluated (DD-12, DD-13, DD-17).
+    if !t0.is_finite() || !t1.is_finite() {
+        return Err(SolveError::InvalidSpan);
+    }
+    if !valid_tolerance(rtol, &atol) {
+        return Err(SolveError::InvalidTolerance);
+    }
+    if let OdeKind::Rk4(h) = kind {
+        // A positive magnitude: the interval gives the direction. Zero never advances
+        // and a negative step moves away from the end, both until MaxSteps.
+        if !(h.is_finite() && h > 0.0) {
+            return Err(SolveError::InvalidStep { h });
+        }
+    }
+    if (0..n).any(|i| !y0.component(i).is_finite()) {
+        // Even for an empty interval: a non-finite state is never a solution.
+        return Err(SolveError::NonFinite { t: span.start });
+    }
     let mut stats = Stats::default();
     let evals = Cell::new(0usize);
     let mut rhs = |t: f64, y: &[f64], out: &mut [f64]| {
