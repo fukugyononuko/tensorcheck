@@ -133,7 +133,7 @@ Light follows null geodesics: the same equation, with $`g_{ab}\,u^a u^b = 0`$ at
 | 5 R☉ | 0.35024″ | 0.35024″ |
 | 10 R☉ | 0.17512″ | 0.17512″ |
 
-The small differences ($`6\times10^{-6}`$ at 1 R☉) are the next term of the series, $`\tfrac{15\pi}{4}(GM/c^2 b)^2`$; with it, the computed values agree to $`2\times10^{-7}`$.
+The small differences ($`6\times10^{-6}`$ at 1 R☉) are the next term of the series, $`\tfrac{15\pi}{4}(GM/c^2 b)^2`$; with it, the computed values agree to $`2\times10^{-7}`$, which is the error of the ODE solve at `rtol = 1e-12`.
 
 Near a black hole the same code bends rays by large angles. Below $`b = \tfrac{3\sqrt{3}}{2} r_s \approx 2.6\,r_s`$ they fall in.
 
