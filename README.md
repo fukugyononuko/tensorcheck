@@ -29,6 +29,23 @@ assert!((v2.value_in(m * m / (s * s)) - 2.5).abs() < 1e-14);
 //   error: cannot contract index `a`: it is upper in both places
 ```
 
+## Gravity in a few lines
+
+Define a spacetime by its metric tensor, and the library does the rest: Christoffel symbols by automatic differentiation, curvature, and geodesics through a dimension-checked ODE solver. The geodesic equation $`\ddot{x}^a = -\Gamma^a{}_{bc}\,\dot{x}^b \dot{x}^c`$ is written as it reads:
+
+```rust
+let rhs = |_tau: Quantity<Time>, y: &(Point<Schw>, Vector<Velocity, Schw>)| {
+    let gamma = christoffel(&g, &y.0).unwrap();
+    (y.1, -(gamma.idx((a, b, c)) * y.1.idx(b) * y.1.idx(c)).into_tensor())
+};
+```
+
+With the Schwarzschild metric, this one right-hand side reproduces the perihelion advance of Mercury (42.98″ per century), the bending of starlight by the Sun (1.75″), and the light rays around a black hole:
+
+![Light rays bent by a black hole](docs/figures/light_bending.svg)
+
+See the [gravity examples](docs/examples.md) for the full code, figures and checked values: the curvature of Schwarzschild spacetime, Halley's comet in SI units, the perihelion of Mercury, and the bending of light.
+
 ## What it covers
 
 | | |
@@ -56,6 +73,12 @@ Each example checks its result against an analytic or published value and fails 
 | `cargo run -p tensorcheck-numerics --example uc07_robertson` | a stiff ODE to t = 1e11 s |
 | `cargo run -p tensorcheck-numerics --example uc08_work` | work of a spring, typed as energy |
 | `cargo run -p tensorcheck-numerics --example uc09_geodesic` | geodesics on a sphere |
+| `cargo run -p tensorcheck-numerics --example grav01_schwarzschild_curvature` | Schwarzschild spacetime: `R_ab = 0` and the Kretschmann scalar |
+| `cargo run -p tensorcheck-numerics --example grav02_kepler` | Halley's comet with Newton's gravity, in SI units |
+| `cargo run -p tensorcheck-numerics --example grav03_perihelion` | the perihelion advance of Mercury from the geodesic equation |
+| `cargo run -p tensorcheck-numerics --example grav04_light_bending` | the bending of light by the Sun and by a black hole |
+
+The gravity examples are explained with figures in [docs/examples.md](docs/examples.md). `python3 scripts/make_figures.py` redraws the figures from their output.
 
 ## Tips
 
@@ -83,7 +106,8 @@ Contraction plans are computed at compile time for each combination of types, so
 - Connections are Levi-Civita in a coordinate basis (no torsion, no orthonormal frames yet).
 - `transform` needs every index in the source chart.
 - The Rosenbrock solver uses a numerical Jacobian; user-supplied Jacobians are planned.
-- ODE solves stop after 100,000 steps.
+- ODE solves stop after 100,000 steps, and there is no event detection (stopping when a condition is met).
+- Quantities have no square root yet (`Quantity::sqrt`); take it on base values and wrap the result again.
 - Requires `std` (no `no_std` yet).
 
 ## How it differs from existing crates

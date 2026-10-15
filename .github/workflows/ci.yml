@@ -50,7 +50,7 @@ jobs:
           for e in uc01_newton uc02_polar uc03_sigma_model uc04_transform uc09_sphere_curvature; do
             cargo run --release -q -p tensorcheck --example "$e"
           done
-          for e in uc07_robertson uc08_work uc09_geodesic; do
+          for e in uc07_robertson uc08_work uc09_geodesic grav01_schwarzschild_curvature grav02_kepler grav03_perihelion grav04_light_bending; do
             cargo run --release -q -p tensorcheck-numerics --example "$e"
           done
       - name: Doc
