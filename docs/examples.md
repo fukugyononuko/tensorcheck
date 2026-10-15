@@ -58,7 +58,7 @@ Contracting `low.idx((a, b, c, d))` with `low.idx((a, b, c, d))` (two lower `a`s
 
 ![Kretschmann scalar against r](figures/schwarzschild_curvature.svg)
 
-Result, from 1.2 r_s to 120 r_s: $`K`$ matches $`12 r_s^2/r^6`$ to $`2\times10^{-14}`$, and $`\sqrt{|R_{ab}R^{ab}|/K} < 2\times10^{-14}`$.
+Result, from 1.2 r_s to 120 r_s: $`K`$ matches $`12 r_s^2/r^6`$ to $`2\times10^{-14}`$. The Ricci tensor is checked separately, component by component in the orthonormal frame, $`R_{\hat a\hat b} = R_{ab}/\sqrt{|g_{aa}g_{bb}|}`$ (the metric tensor is diagonal): every component is below $`2\times10^{-14}\sqrt{K}`$. A scalar such as $`R_{ab}R^{ab}`$ would not do, because with a Lorentzian metric nonzero components can cancel in it.
 
 ## 2. Halley's comet
 

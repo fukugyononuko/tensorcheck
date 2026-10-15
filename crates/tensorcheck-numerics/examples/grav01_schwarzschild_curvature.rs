@@ -10,7 +10,7 @@ use common::{Schw, SchwarzschildMetric, gm_sun, schwarzschild_radius, write_csv}
 use tensorcheck::geometry::curvature;
 use tensorcheck::labels::{a, b, c, d};
 use tensorcheck::units::si::{m, rad};
-use tensorcheck::{Point, slot};
+use tensorcheck::{Metric, Point, slot};
 
 fn main() {
     let rs = schwarzschild_radius(gm_sun()); // about 2.95 km
@@ -39,18 +39,21 @@ fn main() {
         let want = 12.0 * rs_m * rs_m / r.powi(6);
         worst_k = worst_k.max((k - want).abs() / want);
 
-        // R_ab R^ab, compared with K: both are invariants, so the ratio does not
-        // depend on the chart.
-        let ric_up = cv
-            .ricci
-            .raise(slot::_0, &g, &p)
-            .and_then(|t| t.raise(slot::_1, &g, &p))
-            .unwrap();
-        let ric2 = (cv.ricci.idx((a, b)) * ric_up.idx((a, b))).into_tensor();
-        worst_ricci = worst_ricci.max((ric2.value_in(m.pow::<-4>()).abs() / k).sqrt());
+        // R_ab = 0, checked component by component in the orthonormal frame
+        // (independently of K). The metric tensor is diagonal, so the frame
+        // components are R_(a)(b) = R_ab / √|g_aa g_bb|, all with dimension 1/m².
+        // They are compared with the curvature scale √K.
+        let gc = g.components(&p);
+        let diag = [gc[0], gc[4], gc[7], gc[9]];
+        for (i, row) in cv.ricci.base_components().iter().enumerate() {
+            for (j, x) in row.iter().enumerate() {
+                let frame = x / (diag[i] * diag[j]).abs().sqrt();
+                worst_ricci = worst_ricci.max(frame.abs() / k.sqrt());
+            }
+        }
         rows.push(vec![r / rs_m, k * rs_m.powi(4), want * rs_m.powi(4)]);
     }
-    println!("max sqrt(|R_ab R^ab| / K): {worst_ricci:e}");
+    println!("max |R_(a)(b)| / sqrt(K) in the orthonormal frame: {worst_ricci:e}");
     println!("max relative error of K against 12 r_s²/r⁶: {worst_k:e}");
     write_csv("r_over_rs,k_rs4,k_exact_rs4", &rows);
     assert!(worst_ricci < 1e-10);
