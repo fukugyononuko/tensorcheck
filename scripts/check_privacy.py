@@ -27,6 +27,8 @@ def git(*args: str) -> str:
 
 def main() -> int:
     problems = []
+    # On push, CI passes the blank between the empty title and body, so strip first.
+    pr_text = os.environ.get("PR_TEXT", "").strip()
     identities = {e for e in git("log", "--format=%ae%n%ce").splitlines() if e}
     problems += [f"許可していないアドレスのコミットがあります：{e}" for e in sorted(identities - ALLOWED_EMAILS)]
 
@@ -40,8 +42,8 @@ def main() -> int:
         sources = [(f, Path(f).read_text(encoding="utf-8", errors="ignore")) for f in git("ls-files").splitlines() if TEXT_FILE.search(f)]
         log = git("log", "--format=%H%x00%B%x00").split("\0")
         sources += [(f"コミット {log[i].strip()[:7]} のメッセージ", log[i + 1]) for i in range(0, len(log) - 1, 2)]
-        if os.environ.get("PR_TEXT"):
-            sources.append(("PR のタイトルと本文", os.environ["PR_TEXT"]))
+        if pr_text:
+            sources.append(("PR のタイトルと本文", pr_text))
         for where, text in sources:
             lowered = text.lower()
             # 禁止語そのものはログに出さない（CI のログも公開されるため）
@@ -50,7 +52,7 @@ def main() -> int:
     if problems:
         print("\n".join(problems), file=sys.stderr)
         return 1
-    pr = "あり" if os.environ.get("PR_TEXT") else "なし"
+    pr = "あり" if pr_text else "なし"
     print(f"check_privacy: 問題はありません（コミットのアドレス {len(identities)} 種類、禁止語 {len(denylist)} 語、PR の本文 {pr}）")
     return 0
 
