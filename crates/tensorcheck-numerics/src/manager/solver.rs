@@ -220,6 +220,11 @@ where
         // Even for an empty interval: a non-finite state is never a solution.
         return Err(SolveError::NonFinite { t: span.start });
     }
+    if max_steps == 0 && dir * (t1 - t0) > 0.0 {
+        // No step allowed: stop before the adaptive methods evaluate f for the
+        // initial step size.
+        return Err(SolveError::MaxSteps { t: span.start });
+    }
     let mut stats = Stats::default();
     let evals = Cell::new(0usize);
     let mut rhs = |t: f64, y: &[f64], out: &mut [f64]| {

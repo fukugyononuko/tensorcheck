@@ -391,7 +391,7 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 - 許容値の定義域（Codex のレビュー 2026-10-14 で追加）：`rtol` と `atol` のすべての成分が有限で 0 以上。さらに、成分ごとに `atol` と `rtol` の少なくとも一方が正（両方 0 の成分は、どんな誤差とも比べられない）。外れたら、評価の前に `InvalidTolerance` を返す（常微分方程式と定積分で同じ）。負の値を許していたときは、正規化した誤差が負になり、`max_norm` が 0 と判定して、誤差によらず受け入れていた。
 - 次の刻み：$`h_\mathrm{new} = h \cdot \min(f_\mathrm{max}, \max(f_\mathrm{min}, 0.9\,\mathrm{err}^{-1/(q+1)}))`$。$`q`$ は埋め込み公式の低いほうの次数。$`f_\mathrm{max} = 5`$、$`f_\mathrm{min} = 0.2`$。直前の歩を棄却したときは $`f_\mathrm{max} = 1`$。PI 制御は将来（VOL-08）。
 - 最初の刻み：Hairer らの初期刻みの推定（右辺を 2 回評価する）。
-- 失敗：歩数が上限（既定 100,000）を超えたら `MaxSteps`。上限は `Method::max_steps(n)` で変える（issue #22）。解法の型を `StepLimit<M>` で包み、`Method` の隠したメソッド `step_limit()` で M02 の解法に渡す。`Tolerance`（定積分と共通）や解法の構造体に項目を足さないのは、既存の構造体のリテラルの書き方を壊さないため。包みを重ねたら外側の上限を使う。$`\lvert h \rvert < 16\,\varepsilon\,\lvert t \rvert`$ になったら `StepTooSmall`。値が有限でなくなったら `NonFinite`。
+- 失敗：歩数が上限（既定 100,000）を超えたら `MaxSteps`。上限は `Method::max_steps(n)` で変える（issue #22）。解法の型を `StepLimit<M>` で包み、`Method` の隠したメソッド `step_limit()` で M02 の解法に渡す。`Tolerance`（定積分と共通）や解法の構造体に項目を足さないのは、既存の構造体のリテラルの書き方を壊さないため。包みを重ねたら外側の上限を使う。上限 0 は、入力の検査の直後、適応型の初期刻みの計算（`f` を呼ぶ）より前に判定する（区間が空なら成功）。$`\lvert h \rvert < 16\,\varepsilon\,\lvert t \rvert`$ になったら `StepTooSmall`。値が有限でなくなったら `NonFinite`。
 - 適応型の積分：区間ごとの誤差の見積もりの和が $`\max(\mathrm{atol}, \mathrm{rtol}\,\lvert I \rvert)`$ 以下になれば受け入れ、そうでなければ誤差の最も大きい区間を選んで 2 分する（`pick_interval`）。区間の一覧は `Vec` に置く（RES-02）。区間の数の上限（既定 1,000）を超えたら `ToleranceNotMet`。
 
 ## 3.14 DD-14 定積分（E07、M02）

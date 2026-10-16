@@ -269,6 +269,39 @@ fn step_limit_can_be_changed() {
     assert_eq!(e.time().unwrap().value_in(s), 0.0);
     assert_eq!(calls.get(), 0);
 
+    // The same for the adaptive methods, which otherwise evaluate f for the initial
+    // step before the first check (review of PR #35).
+    for e in [
+        decay_until_1s(DormandPrince54.max_steps(0), &calls),
+        decay_until_1s(
+            Rosenbrock {
+                jacobian: Jacobian::Numerical,
+            }
+            .max_steps(0),
+            &calls,
+        ),
+    ] {
+        let e = e.expect_err("no step allowed");
+        assert!(matches!(e, SolveError::MaxSteps { .. }), "{e}");
+        assert_eq!(e.time().unwrap().value_in(s), 0.0);
+    }
+    assert_eq!(calls.get(), 0);
+
+    // An empty interval needs no step, so even a limit of 0 succeeds.
+    let decay = |_t: Quantity<Time>, y: &Quantity<D0>| -*y / (1.0 * s);
+    let tol = Tolerance {
+        rtol: 1e-6,
+        atol: 1e-9 * one,
+    };
+    let sol = solve_ivp(
+        decay,
+        (0.0 * s)..(0.0 * s),
+        1.0 * one,
+        DormandPrince54.max_steps(0),
+        tol,
+    );
+    assert_eq!(sol.unwrap().stats.steps, 0);
+
     // The outer limit wins when limits are nested.
     assert!(decay_until_1s(Rk4 { h: 0.25 }.max_steps(3).max_steps(4), &calls).is_ok());
 
