@@ -10,7 +10,7 @@ use crate::access::component::Slots;
 use crate::access::component::{anti_index, sym_index};
 use crate::contracts::slot;
 use crate::engine::dimension::{DimDiv, DimInfo, DimMul, Prod, Quot, Unit, from_base, to_base};
-use crate::engine::dimension::{DimEq, DimPow, Pow};
+use crate::engine::dimension::{DimEq, DimPow, DimSqrt, Pow};
 use crate::engine::index::{
     AllAbsent, At, Chart, Contract, Contracted, Down, IntoLabels, KindMul, LabelIds, Slot, Space,
     StripLabels, Tensorial, Up, ZipLabels, contract,
@@ -23,13 +23,13 @@ use crate::engine::index::{Here, There};
 use crate::engine::metric::{Metric, inverse_at, inverse_into, metric_at, metric_into};
 use crate::engine::symmetry::{Antisymmetric, NoSym, Symmetric};
 use crate::utility::diagnostics::RhsReturns;
-use crate::utility::diagnostics::{ComponentDimIs, SameSlot};
+use crate::utility::diagnostics::{ComponentDimIs, SameSlot, SqrtAllowed};
 use crate::utility::diagnostics::{CoordOf, IsTensor, LabelCount, MetricOn, VarianceIs};
 use crate::utility::diagnostics::{SameDimension, SameKind, SameSlots, SameSymmetry, UnitMatches};
 use crate::utility::linear::LinearError;
 use crate::utility::scalar::Scalar;
-use crate::utility::typelevel::N1;
 use crate::utility::typelevel::{Concat, Cons, Nil};
+use crate::utility::typelevel::{ConstInt, N1, ToInt};
 use crate::utility::vector_space::{PerDim, TimesDim, VectorSpace};
 
 pub use crate::contracts::{Covector, Quantity, Rank2, Rank3, Rank4, Tensor, Vector};
@@ -38,6 +38,42 @@ impl<D, N: Scalar> Quantity<D, N> {
     /// The value in base units. Prefer [`Quantity::value_in`] to state the unit.
     pub fn base_value(self) -> N {
         self.c
+    }
+
+    /// The square root (API-38). Every exponent of the dimension must be even
+    /// (otherwise ERR-22); the result has every exponent halved. A negative value
+    /// gives NaN, as for `f64::sqrt`.
+    ///
+    /// ```
+    /// use tensorcheck::Quantity;
+    /// use tensorcheck::units::si::{m, s, Velocity};
+    /// let v2 = Quantity::of(9.0, m.pow::<2>() / s.pow::<2>());
+    /// let v: Quantity<Velocity> = v2.sqrt();
+    /// assert_eq!(v.value_in(m / s), 3.0);
+    /// ```
+    pub fn sqrt(self) -> Quantity<<D as DimSqrt>::Out, N>
+    where
+        D: DimSqrt,
+        <D as DimSqrt>::Allowed: SqrtAllowed,
+    {
+        Tensor::from_store(self.c.sqrt())
+    }
+
+    /// The integer power `self^K` for `K` in `-20..=20` (API-39).
+    ///
+    /// ```
+    /// use tensorcheck::Quantity;
+    /// use tensorcheck::units::si::{m, Volume};
+    /// let a = Quantity::of(2.0, m);
+    /// let v: Quantity<Volume> = a.powi::<3>();
+    /// assert_eq!(v.value_in(m.pow::<3>()), 8.0);
+    /// ```
+    pub fn powi<const K: i32>(self) -> Quantity<Pow<D, <ConstInt<K> as ToInt>::Out>, N>
+    where
+        ConstInt<K>: ToInt,
+        D: DimPow<<ConstInt<K> as ToInt>::Out>,
+    {
+        Tensor::from_store(self.c.powi(K))
     }
 }
 

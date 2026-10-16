@@ -2,6 +2,7 @@
 
 -20〜20 のすべての組について、型レベルの整数の足し算・引き算が、ふつうの整数の計算と
 一致することを、コンパイル時の assert で確かめる。掛け算は -4〜4 の倍率で確かめる。
+偶数かどうかと半分（0 に向けて丸める）は、-20〜20 のすべての整数で確かめる（平方根で使う）。
 """
 
 from pathlib import Path
@@ -29,6 +30,10 @@ for a in range(-5, 6):
     for k in range(-4, 5):
         if abs(a * k) <= 20:
             lines.append(f"const _: () = assert!(<<{name(a)} as IntMul<{name(k)}>>::Out as Int>::VALUE == {a * k});")
+for a in range(-20, 21):
+    neg = "" if a % 2 == 0 else "!"
+    lines.append(f"const _: () = assert!({neg}<<{name(a)} as IsEven>::Out as Bool>::VALUE);")
+    lines.append(f"const _: () = assert!(<<{name(a)} as IntHalf>::Out as Int>::VALUE == {int(a / 2)});")
 lines += [
     "",
     "#[test]",

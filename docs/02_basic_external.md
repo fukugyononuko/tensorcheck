@@ -53,6 +53,8 @@
 | API-35 | `Quantity::of(9.8, m / s.pow::<2>())` | 単位の次元をそのまま使って量を作る（型の注釈が要らない。`9.8 * unit` と同じ） | `create` |
 | API-36 | `metric_tensor(&g, &p)`、`inverse_metric_tensor(&g, &p)` | 計量テンソルとその逆を、点での対称なテンソルとして返す（$`G_{IJ}`$ を式に使うため） | `metric_at` / `inverse_at` |
 | API-37 | `t.without_symmetry()` | 対称性の印を外す（成分は変えない） | — |
+| API-38 | `q.sqrt()` | 量の平方根。次元の指数をすべて半分にする。指数に奇数があればコンパイルエラー（ERR-22）。負の値では `f64::sqrt` と同じく NaN | `sqrt` |
+| API-39 | `q.powi::<3>()` | 量の整数乗（$`-20`$〜$`20`$）。次元の指数をすべて $`k`$ 倍する | `powi` |
 | API-22 | `Tensor::<_, _, Symmetric>::from_independent([...], unit)` | 対称・反対称のテンソルを、独立な成分だけから作る | `create` |
 | API-23 | `q.value_in(km)`、`t.components_in(unit)` | 単位を指定して値を取り出す | `read` |
 | API-24 | `t.at((Theta,))`、`t.at((R, Theta))` | 座標を型で指定して成分を 1 つ取り出す。戻り値は `Quantity` | `component` |
@@ -240,6 +242,7 @@ impl Metric for SphereMetric {
 | ERR-19 | 座標基底でない座標系で、接続・曲率・共変微分を求める | `` `{C}` is not a coordinate basis; Christoffel symbols and curvature need a coordinate basis `` | `connection coefficients in non-coordinate bases (e.g. orthonormal frames) are not supported yet` | M03 |
 | ERR-20 | `raise` で上付きの添字を、`lower` で下付きの添字を指定した | `` the index at slot `{P}` is already {Self} `` | `` `raise` applies to a lower index and `lower` to an upper index `` | M01 |
 | ERR-21 | `from_parts` の成分の次元が、座標系から決まる次元と違う | `` component `{P}` has the wrong dimension for this vector `` | `` component a of a vector with dimension [V] has dimension [V]·[x^a]/[X] `` | M01 |
+| ERR-22 | 指数に奇数のある次元の平方根（例：長さの平方根） | `cannot take the square root: the dimension has an odd exponent` | `every base-dimension exponent must be even, e.g. m^2 or m^2/s^2` | E01 |
 
 - 見出しの文言は実装時に、04 のコンパイル失敗のテスト（TC-F）で実際の出力を確かめて調整する。調整したらこの表も直す。
 - 判定する構成要素が M02 の誤り（ERR-14、ERR-15）は、M02 の公開する関数の型の制約として表す。

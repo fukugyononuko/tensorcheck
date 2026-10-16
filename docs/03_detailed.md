@@ -71,12 +71,14 @@ scripts/  check_privacy.py check_workflows.py check_layers.py test_check_layers.
 | 種類 | 表現 | 演算 |
 | --- | --- | --- |
 | 自然数 | `Z`、`S<N>`（Peano 数） | 等しいか（`Eq`）、`Add` |
-| 整数 | `Zero`、`Pos<S<N>>`、`Neg<S<N>>`（0 の表し方を 1 つにする） | `Add`、`Sub`、`Neg`、`MulNat`（自然数倍）、等しいか |
+| 整数 | `Zero`、`Pos<S<N>>`、`Neg<S<N>>`（0 の表し方を 1 つにする） | `Add`、`Sub`、`Neg`、`Mul`（整数倍）、`Half`（半分。0 に向けて丸める）、偶数か、等しいか |
 | 真偽 | `True`、`False` | `If<B, X, Y>` |
 | 並び | `Nil`、`Cons<H, T>` | `Len`、`Concat`、`Zip`、`Map`（trait で表した関数を各要素に適用）、`RemoveMatch`（DD-06） |
 
 - 型の計算は trait の関連型で表す（例：`<A as Add<B>>::Out`）。
 - 次元の指数とラベルの番号は小さい数なので、Peano 数の再帰の深さは、コンパイラの既定の上限（128）に収まる。指数は $`\pm 20`$ まで、ラベルの番号は 63 までを保証の範囲とし、テストで確かめる。
+- 整数倍 `IntMul<K>` の再帰は、倍率 `K` を `Self` にした補助の trait（`ScaleInt<A>`）で書く（issue #19 で変更）。メソッドの `const` 引数（`q.powi::<3>()` の `3`）は、メソッドの候補を探す段階ではまだ未定の推論変数なので、`A: IntMul<?K>` の形のままだと `K` の側の再帰が止まらず、再帰の上限を超える。`Self` が未定なら、コンパイラは「あいまい」として探索を止め、`K` が決まってから解き直す。
+- 半分 `IntHalf` は奇数にも定義する（0 に向けて丸める）。平方根の結果の型を先に決められるようにし、奇数の判定（`AllEven`）だけが ERR-22 で止まるようにするため。
 - 空間の次元数 $`n`$ は型レベルの数にしない。空間ごとの関連定数 `N` と配列の型で持つ（DD-04）。
 
 ## 3.3 DD-03 次元と単位（E01）
@@ -99,6 +101,7 @@ pub trait Unit: Copy + 'static {         // EXT-02
 - 次元の積・商は、指数の並びを要素ごとに足す・引く（`Zip` と `Add`）。単位系が違えば、`SameSystem` を満たさずコンパイルエラーになる。
 - 次元の一致は `SameDimension<D2>` で確かめる。`impl<D> SameDimension<D> for D` だけを実装し、この trait に ERR-01 の文をつける。
 - 単位どうしの積・商・べき（`m / s`、`s.pow::<2>()`）は、`Prod<U1, U2>` などの型を作る。`FACTOR` は関連定数の浮動小数点の演算（`const` での演算は stable）で求める。
+- 量の平方根（API-38）は `DimSqrt` で次元を求める。`Out` は指数を半分にした次元、`Allowed` は指数がすべて偶数か（真偽）。M01 は `Allowed: SqrtAllowed` を求め、`SqrtAllowed` は `True` にだけ実装して ERR-22 の文をつける（ERR-02・ERR-21 と同じ、真偽値での判定）。量の整数乗（API-39）は `DimPow` をそのまま使う。値は `Scalar` の `sqrt`・`powi` で求めるので、自動微分の数値の型でも微分が伝わる。
 - 単位は比例するものだけを扱う（摂氏温度のような原点のずれる単位は扱わない）。
 - 自然単位系（API-06）は、基本次元を「質量」の 1 つにする。$`\mathrm{eV}`$、$`\mathrm{GeV}`$、換算プランク質量 $`M_\mathrm{P} = (\hbar c / 8\pi G_N)^{1/2} = 2.435 \times 10^{18}\,\mathrm{GeV}`$（PDG 2024 の $`\hbar`$、$`c`$、$`G_N`$ から計算して確かめた）を単位として用意する。実装では、定数から計算した値を使う。基準の単位は $`\mathrm{GeV}`$。
 
@@ -436,6 +439,7 @@ ERR ごとに専用の trait を 1 つ置き、`#[diagnostic::on_unimplemented]`
 | ERR-17 | `SameKind<K2>` | 同じテンソル性 |
 | ERR-19 | `IsCoordinateBasis` | `Basis = CoordinateBasis` |
 | ERR-21 | `ComponentDimIs<P>` | `from_parts` の成分の次元の比較が `True` |
+| ERR-22 | `SqrtAllowed` | 次元の指数がすべて偶数（`DimSqrt::Allowed` が `True`） |
 | ERR-20 | `VarianceIs<V, P>` | 指定した枠の上下が、`raise` なら下、`lower` なら上 |
 
 - 実装での補足（フェーズ 1）：見出しを確実に出すには、次のどちらかが要る。

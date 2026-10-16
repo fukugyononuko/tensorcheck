@@ -180,7 +180,7 @@ flowchart LR
 
 | FR | API | EXT | ERR |
 | --- | --- | --- | --- |
-| FR-01 次元つきの量 | API-02, API-20, API-25 | — | ERR-01 |
+| FR-01 次元つきの量 | API-02, API-20, API-25, API-38, API-39 | — | ERR-01, ERR-22 |
 | FR-02 単位系の定義 | API-05, API-06, API-07 | EXT-01 | — |
 | FR-03 単位を指定した入出力 | API-20, API-21, API-23 | EXT-02 | ERR-02 |
 | FR-04 空間の定義 | API-11 | EXT-03 | — |
@@ -192,7 +192,7 @@ flowchart LR
 | FR-10 対称性 | API-04, API-22, API-33, API-37 | — | ERR-12, ERR-13 |
 | FR-11 座標系の変換 | API-11, API-32 | EXT-05 | ERR-10, ERR-16 |
 | FR-12 成分の取り出し | API-24 | — | ERR-11 |
-| FR-13 エラー文 | — | — | ERR-01〜ERR-21 |
+| FR-13 エラー文 | — | — | ERR-01〜ERR-22 |
 | FR-14 例題 | §2a.2 の使い方の例 | — | — |
 | FR-15 共変微分 | API-16, API-54 | EXT-08 | ERR-17 |
 | FR-16 自動微分の数値の型 | API-17 | EXT-06, EXT-08 | ERR-18 |
@@ -236,7 +236,7 @@ flowchart LR
 
 | 要件 | テスト |
 | --- | --- |
-| FR-01 次元つきの量 | TC-U01, TC-U02, TC-I01, TC-F01, TC-E01 |
+| FR-01 次元つきの量 | TC-U01, TC-U02, TC-I01, TC-F01, TC-F23, TC-E01, TC-E09 |
 | FR-02 単位系の定義 | TC-U02, TC-R01 |
 | FR-03 単位を指定した入出力 | TC-U02, TC-F02, TC-R02 |
 | FR-04 空間の定義 | TC-I03, TC-R03 |
@@ -248,7 +248,7 @@ flowchart LR
 | FR-10 対称性 | TC-U06, TC-F12, TC-F13 |
 | FR-11 座標系の変換 | TC-U08, TC-I04, TC-F10, TC-R04 |
 | FR-12 成分の取り出し | TC-U05, TC-F11 |
-| FR-13 エラー文 | TC-F01〜TC-F18, TC-F20〜TC-F22 |
+| FR-13 エラー文 | TC-F01〜TC-F18, TC-F20〜TC-F23 |
 | FR-14 例題 | TC-E01〜TC-E11 |
 | FR-15 共変微分 | TC-U12 |
 | FR-16 自動微分の数値の型 | TC-U09, TC-F18 |
