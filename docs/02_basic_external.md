@@ -54,6 +54,7 @@
 | API-36 | `metric_tensor(&g, &p)`、`inverse_metric_tensor(&g, &p)` | 計量テンソルとその逆を、点での対称なテンソルとして返す（$`G_{IJ}`$ を式に使うため） | `metric_at` / `inverse_at` |
 | API-37 | `t.without_symmetry()` | 対称性の印を外す（成分は変えない） | — |
 | API-38 | `q.sqrt()` | 量の平方根。次元の指数をすべて半分にする。指数に奇数があればコンパイルエラー（ERR-22）。負の値では `f64::sqrt` と同じく NaN | `sqrt` |
+| API-56 | `2.0 / q`、`q.recip()` | 量の逆数。次元の指数の符号をすべて反転する。`f64 / 量` は `f64` の量だけ（`f64 * テンソル` と同じ）。`recip` は数値の型によらない | `div` |
 | API-39 | `q.powi::<3>()` | 量の整数乗（$`-20`$〜$`20`$）。次元の指数をすべて $`k`$ 倍する | `powi` |
 | API-22 | `Tensor::<_, _, Symmetric>::from_independent([...], unit)` | 対称・反対称のテンソルを、独立な成分だけから作る | `create` |
 | API-23 | `q.value_in(km)`、`t.components_in(unit)` | 単位を指定して値を取り出す | `read` |

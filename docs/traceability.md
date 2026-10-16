@@ -180,7 +180,7 @@ flowchart LR
 
 | FR | API | EXT | ERR |
 | --- | --- | --- | --- |
-| FR-01 次元つきの量 | API-02, API-20, API-25, API-38, API-39 | — | ERR-01, ERR-22 |
+| FR-01 次元つきの量 | API-02, API-20, API-25, API-38, API-39, API-56 | — | ERR-01, ERR-22 |
 | FR-02 単位系の定義 | API-05, API-06, API-07 | EXT-01 | — |
 | FR-03 単位を指定した入出力 | API-20, API-21, API-23 | EXT-02 | ERR-02 |
 | FR-04 空間の定義 | API-11 | EXT-03 | — |

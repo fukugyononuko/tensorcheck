@@ -59,6 +59,23 @@ impl<D, N: Scalar> Quantity<D, N> {
         Tensor::from_store(self.c.sqrt())
     }
 
+    /// The reciprocal `1 / self` (API-56); every exponent of the dimension changes sign.
+    /// Same as `1.0 / q` for `f64` values.
+    ///
+    /// ```
+    /// use tensorcheck::Quantity;
+    /// use tensorcheck::units::si::{s, Frequency, one};
+    /// let t = Quantity::of(0.5, s);
+    /// let f: Quantity<Frequency> = t.recip();
+    /// assert_eq!(f.value_in(one / s), 2.0);
+    /// ```
+    pub fn recip(self) -> Quantity<Pow<D, N1>, N>
+    where
+        D: DimPow<N1>,
+    {
+        Tensor::from_store(N::one() / self.c)
+    }
+
     /// The integer power `self^K` for `K` in `-20..=20` (API-39).
     ///
     /// ```
@@ -239,6 +256,14 @@ impl<D, S: Slots, Sym, K> Div<f64> for Tensor<D, S, Sym, K, f64> {
     #[inline(always)]
     fn div(self, k: f64) -> Self {
         self.map(|x| x / k)
+    }
+}
+/// `k / q`: the dimension of the result is the reciprocal of `q`'s (API-56).
+impl<D: DimPow<N1>> Div<Quantity<D, f64>> for f64 {
+    type Output = Quantity<Pow<D, N1>, f64>;
+    #[inline(always)]
+    fn div(self, q: Quantity<D, f64>) -> Self::Output {
+        Tensor::from_store(self / q.c)
     }
 }
 

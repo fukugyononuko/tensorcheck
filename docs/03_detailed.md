@@ -176,6 +176,7 @@ pub struct ChartBound;
 | --- | --- | --- |
 | `a + b`、`a - b` | `impl Add for Tensor<…>` | `SameDimension`（ERR-01）、`SameSlots`（ERR-03）、`SameSymmetry`（ERR-13）、`SameKind`（ERR-17） |
 | `k * t`、`t / k`（`k` は `Quantity` か `f64`） | `impl Mul`、`impl Div` | 次元は `Prod`・`Quot` |
+| `k / q`（`k` は `f64`、`q` は `Quantity`）、`q.recip()` | `impl Div<Quantity<D>> for f64`、メソッド | 次元は `Pow<D, N1>`。テンソル（階数 1 以上）の逆数は定義しない（issue #20） |
 | `q1 * q2`（スカラーどうし） | `impl Mul for Quantity` | — |
 | `t.outer(&u)` | 入れ物を作り、$`a_i b_j`$ を置く | 枠の並びは `Concat`、テンソル性は両方が `Tensorial` なら `Tensorial` |
 | `Quantity::new(x, unit)` | `x * U::FACTOR` を置く | `UnitMatches<D>`（ERR-02） |

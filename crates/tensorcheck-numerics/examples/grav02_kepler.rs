@@ -34,7 +34,7 @@ fn main() {
     };
 
     // Start at perihelion, moving with the vis-viva speed v² = GM (2/q − 1/a).
-    let v_q: Quantity<Velocity> = (2.0 * (gm / q) - gm / a).sqrt();
+    let v_q: Quantity<Velocity> = (gm * (2.0 / q - 1.0 / a)).sqrt();
     let y0: State = (
         Point::new((q, 0.0 * m)),
         Vector::from_parts((0.0 * (m / s), v_q)),
