@@ -28,22 +28,18 @@ fn main() {
         let x = y.0.coord(X) * m;
         let yy = y.0.coord(Y) * m;
         let r = y.0.coord(X).hypot(y.0.coord(Y)) * m;
-        let k = gm / (r * r * r); // 1/s²
+        let k = gm / r.powi::<3>(); // 1/s²
         let acc: Vector<Acceleration, Cartesian2> = Vector::from_parts((-(k * x), -(k * yy)));
         (y.1, acc)
     };
 
     // Start at perihelion, moving with the vis-viva speed v² = GM (2/q − 1/a).
-    // Quantities have no square root yet, so the two roots below are taken on base
-    // values (m, s) and wrapped again.
-    let (gm_b, q_b, a_b) = (gm.base_value(), q.value_in(m), a.value_in(m));
-    let v_q: Quantity<Velocity> = Quantity::new((gm_b * (2.0 / q_b - 1.0 / a_b)).sqrt(), m / s);
+    let v_q: Quantity<Velocity> = (2.0 * (gm / q) - gm / a).sqrt();
     let y0: State = (
         Point::new((q, 0.0 * m)),
         Vector::from_parts((0.0 * (m / s), v_q)),
     );
-    let period: Quantity<Time> =
-        Quantity::new(2.0 * std::f64::consts::PI * (a_b.powi(3) / gm_b).sqrt(), s);
+    let period: Quantity<Time> = 2.0 * std::f64::consts::PI * (a.powi::<3>() / gm).sqrt();
     println!(
         "period from Kepler's third law: {:.3} years",
         period.value_in(s) / YEAR

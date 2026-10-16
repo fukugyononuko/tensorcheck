@@ -6,6 +6,7 @@
 use core::marker::PhantomData;
 
 use crate::utility::diagnostics::{UnitDimensionIs, UnitMatches};
+use crate::utility::typelevel::{AllEven, MapHalf};
 use crate::utility::typelevel::{Bool, IntList, IntListEq, Len, MapMul, ZipAdd, ZipSub};
 
 /// A system of base dimensions (EXT-01), for example SI with seven base dimensions.
@@ -44,6 +45,20 @@ pub trait DimPow<K> {
 }
 impl<Sys, A: MapMul<K>, K> DimPow<K> for Dim<Sys, A> {
     type Out = Dim<Sys, <A as MapMul<K>>::Out>;
+}
+
+/// Square root of a dimension: every exponent halved. `Out` is defined for any
+/// dimension (odd exponents round toward zero); `Allowed` is [`True`](crate::utility::typelevel::True)
+/// only when every exponent is even, and callers must require it (ERR-22).
+pub trait DimSqrt {
+    /// `Self^(1/2)` when [`DimSqrt::Allowed`] is true.
+    type Out;
+    /// Whether every exponent is even.
+    type Allowed: Bool;
+}
+impl<Sys, A: MapHalf + AllEven> DimSqrt for Dim<Sys, A> {
+    type Out = Dim<Sys, <A as MapHalf>::Out>;
+    type Allowed = <A as AllEven>::Out;
 }
 
 /// `A · B`.

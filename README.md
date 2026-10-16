@@ -107,7 +107,6 @@ Contraction plans are computed at compile time for each combination of types, so
 - `transform` needs every index in the source chart.
 - The Rosenbrock solver uses a numerical Jacobian; user-supplied Jacobians are planned.
 - ODE solves stop after 100,000 steps, and there is no event detection (stopping when a condition is met).
-- Quantities have no square root yet (`Quantity::sqrt`); take it on base values and wrap the result again.
 - Requires `std` (no `no_std` yet).
 
 ## How it differs from existing crates

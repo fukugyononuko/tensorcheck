@@ -179,6 +179,16 @@ impl<S> SameSlot<Decoy<S>> for S {}
 pub trait ComponentDimIs<P> {}
 impl<P> ComponentDimIs<P> for crate::utility::typelevel::True {}
 
+/// ERR-22: `sqrt` needs every exponent of the dimension to be even. Implemented only
+/// for `True`.
+#[diagnostic::on_unimplemented(
+    message = "cannot take the square root: the dimension has an odd exponent",
+    label = "the dimension of this quantity is not a square",
+    note = "every base-dimension exponent must be even, e.g. m^2 or m^2/s^2"
+)]
+pub trait SqrtAllowed {}
+impl SqrtAllowed for crate::utility::typelevel::True {}
+
 /// ERR-19: connection coefficients and curvature need a coordinate basis.
 #[diagnostic::on_unimplemented(
     message = "`{C}` is not a coordinate basis; Christoffel symbols and curvature need a coordinate basis",

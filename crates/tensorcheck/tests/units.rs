@@ -2,7 +2,8 @@
 
 use tensorcheck::units::natural::{self, GeV, MeV, reduced_planck_mass};
 use tensorcheck::units::si::{
-    Acceleration, Energy, Force, J, Length, Mass, Time, Velocity, au, g, h, kg, km, m, min, s,
+    Acceleration, Area, Energy, Force, Frequency, J, Length, Mass, Time, Velocity, Volume, au, g,
+    h, kg, km, m, min, one, s,
 };
 use tensorcheck::{Dim, Quantity, Unit, UnitSystem};
 
@@ -148,3 +149,51 @@ fn unit_system_is_usable_in_bounds<S: UnitSystem>() {}
 #[allow(dead_code)]
 type CheckDim =
     Dim<tensorcheck::units::si::Si, <tensorcheck::units::si::Si as UnitSystem>::Dimensionless>;
+
+// TC-U02 (issue #19): square roots and integer powers of quantities. The types in the
+// annotations are the check on the dimensions; the values are one rounding each.
+#[test]
+fn sqrt_halves_every_exponent() {
+    let side: Quantity<Length> = Quantity::of(9.0, m.pow::<2>()).sqrt();
+    assert_eq!(side.value_in(m), 3.0);
+    let v: Quantity<Velocity> = Quantity::of(16.0, m.pow::<2>() / s.pow::<2>()).sqrt();
+    assert_eq!(v.value_in(m / s), 4.0);
+    // Negative exponents: GM / a^3 has dimension s^-2, so its root is an angular rate.
+    let omega: Quantity<Frequency> =
+        (Quantity::of(4.0, m.pow::<3>() / s.pow::<2>()) / Quantity::of(1.0, m.pow::<3>())).sqrt();
+    assert_eq!(omega.value_in(one / s), 2.0);
+    // Natural units: GeV^2 -> GeV.
+    let mass: Quantity<natural::Mass> = Quantity::of(2.25, GeV.pow::<2>()).sqrt();
+    assert!(rel(mass.value_in(GeV), 1.5) <= ROUND_TRIP_TOL);
+    // Dimensionless quantities, and NaN for negative values as for f64::sqrt.
+    assert_eq!(Quantity::of(0.25, one).sqrt().value_in(one), 0.5);
+    assert!(Quantity::of(-1.0, m.pow::<2>()).sqrt().value_in(m).is_nan());
+}
+
+#[test]
+fn powi_multiplies_every_exponent() {
+    let a = Quantity::of(2.0, m);
+    let vol: Quantity<Volume> = a.powi::<3>();
+    assert_eq!(vol.value_in(m.pow::<3>()), 8.0);
+    let per_area = a.powi::<-2>();
+    assert_eq!(per_area.value_in(m.pow::<-2>()), 0.25);
+    let unity = a.powi::<0>();
+    assert_eq!(unity.value_in(one), 1.0);
+    let same: Quantity<Length> = a.powi::<1>();
+    assert_eq!(same.value_in(m), 2.0);
+    // sqrt undoes powi::<2> up to the sign.
+    let back: Quantity<Length> = Quantity::of(-3.0, m).powi::<2>().sqrt();
+    assert_eq!(back.value_in(m), 3.0);
+}
+
+#[test]
+fn sqrt_and_powi_carry_derivatives() {
+    use tensorcheck::spaces::plane::Plane;
+    use tensorcheck::utility::autodiff::Dual;
+    // d/dx sqrt(x) = 1 / (2 sqrt(x)), d/dx x^3 = 3 x^2 at x = 4.
+    let x: Quantity<Area, Dual<Plane>> = Quantity::from_base_components(Dual::variable(4.0, 0));
+    let r: Quantity<Length, Dual<Plane>> = x.sqrt();
+    assert_eq!((r.base_value().re, r.base_value().d[0]), (2.0, 0.25));
+    let c = x.powi::<3>().base_value();
+    assert_eq!((c.re, c.d[0]), (64.0, 48.0));
+}

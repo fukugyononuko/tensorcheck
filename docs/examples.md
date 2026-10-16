@@ -71,16 +71,29 @@ let rhs = |_t: Quantity<Time>, y: &State| {
     let x = y.0.coord(X) * m;
     let yy = y.0.coord(Y) * m;
     let r = y.0.coord(X).hypot(y.0.coord(Y)) * m;
-    let k = gm / (r * r * r); // 1/s²
+    let k = gm / r.powi::<3>(); // 1/s²
     let acc: Vector<Acceleration, Cartesian2> = Vector::from_parts((-(k * x), -(k * yy)));
     (y.1, acc)
 };
 ```
 
-Writing `gm / (r * r)` instead is a compile error:
+Writing `gm / r.powi::<2>()` instead is a compile error:
 
 ```text
 error[E0277]: component `_0` has the wrong dimension for this vector
+```
+
+The initial speed (vis-viva, $`v^2 = GM(2/q - 1/a)`$) and the period (Kepler's third law, $`T = 2\pi\sqrt{a^3/GM}`$) stay typed too. A square root halves every exponent of the dimension:
+
+```rust
+let v_q: Quantity<Velocity> = (2.0 * (gm / q) - gm / a).sqrt();
+let period: Quantity<Time> = 2.0 * std::f64::consts::PI * (a.powi::<3>() / gm).sqrt();
+```
+
+Taking the root of a dimension with an odd exponent, such as $`\sqrt{a^3/(GM\,a)}`$ (dimension $`\mathrm{s^2/m}`$), does not compile:
+
+```text
+error[E0277]: cannot take the square root: the dimension has an odd exponent
 ```
 
 ![Orbit of Halley's comet](figures/halley.svg)
@@ -141,5 +154,4 @@ Near a black hole the same code bends rays by large angles. Below $`b = \tfrac{3
 
 ## What is not shown
 
-- Quantities have no square root yet, so the vis-viva speed and Kepler's period in `grav02_kepler` are computed on base values and wrapped again with `Quantity::new`.
 - There is no event detection in the ODE solvers; `grav03_perihelion` finds perihelia by bisection on the steps.

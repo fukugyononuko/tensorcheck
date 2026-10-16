@@ -251,25 +251,36 @@ pub trait IntMul<K> {
     /// `Self * K`.
     type Out;
 }
-impl<A> IntMul<Zero> for A {
+impl<A, K: ScaleInt<A>> IntMul<K> for A {
+    type Out = <K as ScaleInt<A>>::Out;
+}
+
+/// `A * Self`: the recursion of [`IntMul`] on the factor. The factor is the `Self` type
+/// so that, while it is still unknown (a method's `const` argument before it is
+/// substituted), the compiler stops with "ambiguous" instead of recursing without end.
+pub trait ScaleInt<A> {
+    /// `A * Self`.
+    type Out;
+}
+impl<A> ScaleInt<A> for Zero {
     type Out = Zero;
 }
-impl<A> IntMul<Pos<S<Z>>> for A {
+impl<A> ScaleInt<A> for Pos<S<Z>> {
     type Out = A;
 }
-impl<A, N> IntMul<Pos<S<S<N>>>> for A
+impl<A, N> ScaleInt<A> for Pos<S<S<N>>>
 where
-    A: IntMul<Pos<S<N>>>,
-    <A as IntMul<Pos<S<N>>>>::Out: IntAdd<A>,
+    Pos<S<N>>: ScaleInt<A>,
+    <Pos<S<N>> as ScaleInt<A>>::Out: IntAdd<A>,
 {
-    type Out = <<A as IntMul<Pos<S<N>>>>::Out as IntAdd<A>>::Out;
+    type Out = <<Pos<S<N>> as ScaleInt<A>>::Out as IntAdd<A>>::Out;
 }
-impl<A, N> IntMul<Neg<N>> for A
+impl<A, N> ScaleInt<A> for Neg<N>
 where
-    A: IntMul<Pos<N>>,
-    <A as IntMul<Pos<N>>>::Out: IntNeg,
+    Pos<N>: ScaleInt<A>,
+    <Pos<N> as ScaleInt<A>>::Out: IntNeg,
 {
-    type Out = <<A as IntMul<Pos<N>>>::Out as IntNeg>::Out;
+    type Out = <<Pos<N> as ScaleInt<A>>::Out as IntNeg>::Out;
 }
 
 /// Maps a `const` integer to its type-level integer, for `-20..=20`.
@@ -387,6 +398,94 @@ impl<K> MapMul<K> for Nil {
 }
 impl<A: IntMul<K>, T: MapMul<K>, K> MapMul<K> for Cons<A, T> {
     type Out = Cons<<A as IntMul<K>>::Out, <T as MapMul<K>>::Out>;
+}
+
+/// Half of a natural, rounded down. Total, so that a square root can name its result
+/// type before the evenness check ([`IsEven`]) reports an odd exponent.
+pub trait NatHalf {
+    /// `Self / 2`, rounded down.
+    type Out;
+}
+impl NatHalf for Z {
+    type Out = Z;
+}
+impl NatHalf for S<Z> {
+    type Out = Z;
+}
+impl<N: NatHalf> NatHalf for S<S<N>> {
+    type Out = S<<N as NatHalf>::Out>;
+}
+
+/// Whether a natural or an integer is even: `Out` is [`True`] or [`False`].
+pub trait IsEven {
+    /// The result.
+    type Out: Bool;
+}
+impl IsEven for Z {
+    type Out = True;
+}
+impl IsEven for S<Z> {
+    type Out = False;
+}
+impl<N: IsEven> IsEven for S<S<N>> {
+    type Out = <N as IsEven>::Out;
+}
+impl IsEven for Zero {
+    type Out = True;
+}
+impl<N: IsEven> IsEven for Pos<N> {
+    type Out = <N as IsEven>::Out;
+}
+impl<N: IsEven> IsEven for Neg<N> {
+    type Out = <N as IsEven>::Out;
+}
+
+/// Half of an integer, rounded toward zero (used for square roots of dimensions).
+pub trait IntHalf {
+    /// `Self / 2`, rounded toward zero.
+    type Out;
+}
+impl IntHalf for Zero {
+    type Out = Zero;
+}
+impl IntHalf for Pos<S<Z>> {
+    type Out = Zero;
+}
+impl<N: NatHalf> IntHalf for Pos<S<S<N>>> {
+    type Out = Pos<S<<N as NatHalf>::Out>>;
+}
+impl IntHalf for Neg<S<Z>> {
+    type Out = Zero;
+}
+impl<N: NatHalf> IntHalf for Neg<S<S<N>>> {
+    type Out = Neg<S<<N as NatHalf>::Out>>;
+}
+
+/// Halves every integer in a list.
+pub trait MapHalf {
+    /// The halved list.
+    type Out;
+}
+impl MapHalf for Nil {
+    type Out = Nil;
+}
+impl<A: IntHalf, T: MapHalf> MapHalf for Cons<A, T> {
+    type Out = Cons<<A as IntHalf>::Out, <T as MapHalf>::Out>;
+}
+
+/// Whether every integer in a list is even.
+pub trait AllEven {
+    /// The result.
+    type Out: Bool;
+}
+impl AllEven for Nil {
+    type Out = True;
+}
+impl<A: IsEven, T: AllEven> AllEven for Cons<A, T>
+where
+    <A as IsEven>::Out: And<<T as AllEven>::Out>,
+{
+    type Out = <<A as IsEven>::Out as And<<T as AllEven>::Out>>::Out;
 }
 
 /// Reads a list of type-level integers into a slice.
