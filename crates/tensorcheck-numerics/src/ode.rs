@@ -55,6 +55,50 @@ pub enum Jacobian {
 pub trait Method: Copy {
     #[doc(hidden)]
     fn kind(self) -> solver::OdeKind;
+    #[doc(hidden)]
+    fn step_limit(self) -> usize {
+        MAX_STEPS
+    }
+
+    /// The same method with at most `n` steps instead of [`MAX_STEPS`] (API-57).
+    /// Adaptive methods count rejected steps too. Reaching the limit returns
+    /// [`SolveError::MaxSteps`] with the time reached; with `n = 0` that is the start
+    /// time (unless the interval is empty).
+    ///
+    /// ```
+    /// use tensorcheck::Quantity;
+    /// use tensorcheck::units::si::{Dimensionless, Frequency, Time, one, s};
+    /// use tensorcheck_numerics::ode::{Method, Rk4, SolveError, Tolerance, solve_ivp};
+    ///
+    /// let rhs = |_t: Quantity<Time>, _y: &Quantity<Dimensionless>| -> Quantity<Frequency> { 1.0 * (one / s) };
+    /// let tol = Tolerance { rtol: 1e-6, atol: 1e-9 * one };
+    /// // Four steps of 0.25 s cover 1 s; a limit of 2 stops at 0.5 s.
+    /// let r = solve_ivp(rhs, (0.0 * s)..(1.0 * s), 0.0 * one, Rk4 { h: 0.25 }.max_steps(2), tol);
+    /// assert!(matches!(r, Err(SolveError::MaxSteps { t }) if t.value_in(s) == 0.5));
+    /// ```
+    fn max_steps(self, n: usize) -> StepLimit<Self> {
+        StepLimit {
+            method: self,
+            max_steps: n,
+        }
+    }
+}
+
+/// A method with its own step limit, made by [`Method::max_steps`].
+#[derive(Clone, Copy, Debug)]
+pub struct StepLimit<M> {
+    /// The underlying method.
+    pub method: M,
+    /// The largest number of steps.
+    pub max_steps: usize,
+}
+impl<M: Method> Method for StepLimit<M> {
+    fn kind(self) -> solver::OdeKind {
+        self.method.kind()
+    }
+    fn step_limit(self) -> usize {
+        self.max_steps
+    }
 }
 impl Method for Rk4 {
     fn kind(self) -> solver::OdeKind {
@@ -221,7 +265,7 @@ impl<T, Y: fmt::Debug> fmt::Debug for Solution<T, Y> {
     }
 }
 
-/// Largest number of steps (DD-13).
+/// Default largest number of steps (DD-13); change it with [`Method::max_steps`].
 pub const MAX_STEPS: usize = 100_000;
 
 /// Solves `dy/dt = f(t, y)` from `span.start` to `span.end` (which may be earlier)
@@ -252,6 +296,7 @@ where
         span,
         y0,
         method.kind(),
+        method.step_limit(),
         tol.rtol,
         &tol.atol,
         &mut |_, _| {},
@@ -281,6 +326,7 @@ where
         span,
         y0,
         method.kind(),
+        method.step_limit(),
         tol.rtol,
         &tol.atol,
         &mut on_step,

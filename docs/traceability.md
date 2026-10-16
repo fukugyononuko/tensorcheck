@@ -200,7 +200,7 @@ flowchart LR
 | FR-19 硬い常微分方程式 | API-42 | EXT-07 | — |
 | FR-20 定積分 | API-14, API-46, API-47, API-48 | EXT-07 | — |
 | FR-21 数値微分 | API-15, API-49 | EXT-07 | — |
-| FR-22 誤差の許容値と失敗の知らせ | API-43, API-44, API-47, API-48 | — | ERR-15 |
+| FR-22 誤差の許容値と失敗の知らせ | API-43, API-44, API-47, API-48, API-57 | — | ERR-15 |
 | FR-25 テンソル場 | API-55 | EXT-08 | ERR-18 |
 | FR-26 Christoffel 記号 | API-16, API-50, API-51, API-53 | EXT-06 | ERR-16, ERR-17, ERR-19 |
 | FR-27 曲率 | API-16, API-52, API-53 | EXT-06 | — |

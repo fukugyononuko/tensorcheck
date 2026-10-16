@@ -106,7 +106,7 @@ Contraction plans are computed at compile time for each combination of types, so
 - Connections are Levi-Civita in a coordinate basis (no torsion, no orthonormal frames yet).
 - `transform` needs every index in the source chart.
 - The Rosenbrock solver uses a numerical Jacobian; user-supplied Jacobians are planned.
-- ODE solves stop after 100,000 steps, and there is no event detection (stopping when a condition is met).
+- ODE solvers have no event detection (stopping when a condition is met).
 - Requires `std` (no `no_std` yet).
 
 ## How it differs from existing crates

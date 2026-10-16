@@ -7,7 +7,8 @@ use tensorcheck::spaces::sphere2::{Angles, SphereMetric};
 use tensorcheck::units::si::{Dimensionless, Frequency, Length, Time, Velocity, m, one, rad, s};
 use tensorcheck::{Point, Quantity, Vector, metric_tensor};
 use tensorcheck_numerics::ode::{
-    DormandPrince54, Rk4, SolveError, Tolerance, solve_ivp, solve_ivp_with,
+    DormandPrince54, Jacobian, Method, Rk4, Rosenbrock, SolveError, Tolerance, solve_ivp,
+    solve_ivp_with,
 };
 
 type D0 = Dimensionless;
@@ -232,4 +233,115 @@ fn failures_carry_the_time() {
         },
     );
     assert!(matches!(r, Err(SolveError::NonFinite { .. })));
+}
+
+// TC-U27 (issue #22): the step limit set with `Method::max_steps`. Steps of 0.25 s
+// are exact in binary, so four of them end exactly at 1 s.
+fn decay_until_1s<M: Method>(
+    method: M,
+    calls: &std::cell::Cell<usize>,
+) -> Result<tensorcheck_numerics::ode::Solution<Time, Quantity<D0>>, SolveError<Time>> {
+    let decay = |_t: Quantity<Time>, y: &Quantity<D0>| {
+        calls.set(calls.get() + 1);
+        -*y / (1.0 * s)
+    };
+    let tol = Tolerance {
+        rtol: 1e-6,
+        atol: 1e-9 * one,
+    };
+    solve_ivp(decay, (0.0 * s)..(1.0 * s), 1.0 * one, method, tol)
+}
+
+#[test]
+fn step_limit_can_be_changed() {
+    let calls = std::cell::Cell::new(0);
+    let run = |method| decay_until_1s(method, &calls);
+
+    // Exactly the steps needed: success. One fewer: MaxSteps where it stopped.
+    assert_eq!(run(Rk4 { h: 0.25 }.max_steps(4)).unwrap().stats.steps, 4);
+    let e = run(Rk4 { h: 0.25 }.max_steps(3)).expect_err("needs four steps");
+    assert!(matches!(e, SolveError::MaxSteps { .. }), "{e}");
+    assert_eq!(e.time().unwrap().value_in(s), 0.75);
+
+    // Zero steps: MaxSteps at the start, without calling f.
+    calls.set(0);
+    let e = run(Rk4 { h: 0.25 }.max_steps(0)).expect_err("no step allowed");
+    assert_eq!(e.time().unwrap().value_in(s), 0.0);
+    assert_eq!(calls.get(), 0);
+
+    // The same for the adaptive methods, which otherwise evaluate f for the initial
+    // step before the first check (review of PR #35).
+    for e in [
+        decay_until_1s(DormandPrince54.max_steps(0), &calls),
+        decay_until_1s(
+            Rosenbrock {
+                jacobian: Jacobian::Numerical,
+            }
+            .max_steps(0),
+            &calls,
+        ),
+    ] {
+        let e = e.expect_err("no step allowed");
+        assert!(matches!(e, SolveError::MaxSteps { .. }), "{e}");
+        assert_eq!(e.time().unwrap().value_in(s), 0.0);
+    }
+    assert_eq!(calls.get(), 0);
+
+    // An empty interval needs no step, so even a limit of 0 succeeds.
+    let decay = |_t: Quantity<Time>, y: &Quantity<D0>| -*y / (1.0 * s);
+    let tol = Tolerance {
+        rtol: 1e-6,
+        atol: 1e-9 * one,
+    };
+    let sol = solve_ivp(
+        decay,
+        (0.0 * s)..(0.0 * s),
+        1.0 * one,
+        DormandPrince54.max_steps(0),
+        tol,
+    );
+    assert_eq!(sol.unwrap().stats.steps, 0);
+
+    // The outer limit wins when limits are nested.
+    assert!(decay_until_1s(Rk4 { h: 0.25 }.max_steps(3).max_steps(4), &calls).is_ok());
+
+    // Above the default: 200,000 steps of 5e-6 s.
+    let sol = decay_until_1s(Rk4 { h: 5e-6 }, &calls);
+    assert!(matches!(sol, Err(SolveError::MaxSteps { .. })));
+    let sol = run(Rk4 { h: 5e-6 }.max_steps(300_000)).unwrap();
+    assert!(sol.stats.steps > tensorcheck_numerics::ode::MAX_STEPS);
+}
+
+type OscState = (Quantity<Length>, Quantity<Velocity>);
+
+fn oscillator_for_10s<M: Method>(
+    method: M,
+) -> Result<tensorcheck_numerics::ode::Solution<Time, OscState>, SolveError<Time>> {
+    let y0 = (1.0 * m, 0.0 * (m / s));
+    let tol = Tolerance {
+        rtol: 1e-10,
+        atol: (1e-12 * m, 1e-12 * (m / s)),
+    };
+    solve_ivp(oscillator, (0.0 * s)..(10.0 * s), y0, method, tol)
+}
+
+#[test]
+fn step_limit_counts_rejected_steps_of_adaptive_methods() {
+    // Returns the rejected steps, so the caller can see that they were counted.
+    fn check<M: Method>(method: M) -> usize {
+        let st = oscillator_for_10s(method.max_steps(usize::MAX))
+            .unwrap()
+            .stats;
+        let used = st.steps + st.rejected;
+        assert!(oscillator_for_10s(method.max_steps(used)).is_ok());
+        let e = oscillator_for_10s(method.max_steps(used - 1)).expect_err("one step short");
+        assert!(matches!(e, SolveError::MaxSteps { .. }), "{e}");
+        st.rejected
+    }
+    // Dormand–Prince rejects 5 of 324 steps here (measured), so the limit must
+    // count rejected steps for the boundary above to hold.
+    assert!(check(DormandPrince54) > 0);
+    check(Rosenbrock {
+        jacobian: Jacobian::Numerical,
+    });
 }
