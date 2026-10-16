@@ -197,3 +197,34 @@ fn sqrt_and_powi_carry_derivatives() {
     let c = x.powi::<3>().base_value();
     assert_eq!((c.re, c.d[0]), (64.0, 48.0));
 }
+
+// TC-U02 (issue #20): `k / q` and `q.recip()` flip the sign of every exponent.
+#[test]
+fn reciprocal_of_a_quantity() {
+    let q: Quantity<Length> = Quantity::new(4.0, m);
+    let a: Quantity<Length> = Quantity::new(2.0, m);
+    let inv = 2.0 / q - 1.0 / a;
+    assert_eq!(inv.value_in(m.pow::<-1>()), 0.0);
+    let f: Quantity<Frequency> = 3.0 / Quantity::of(0.5, s);
+    assert_eq!(f.value_in(one / s), 6.0);
+    let r: Quantity<Frequency> = Quantity::of(0.25, s).recip();
+    assert_eq!(r.value_in(one / s), 4.0);
+    // Undoes itself; 1/0 is infinite, as for f64.
+    let back: Quantity<Length> = q.recip().recip();
+    assert_eq!(back.value_in(m), 4.0);
+    assert!(
+        (1.0 / Quantity::of(0.0, m))
+            .value_in(m.pow::<-1>())
+            .is_infinite()
+    );
+}
+
+#[test]
+fn recip_carries_derivatives() {
+    use tensorcheck::spaces::plane::Plane;
+    use tensorcheck::utility::autodiff::Dual;
+    // d/dx (1/x) = -1/x² at x = 4.
+    let x: Quantity<Length, Dual<Plane>> = Quantity::from_base_components(Dual::variable(4.0, 0));
+    let r = x.recip().base_value();
+    assert_eq!((r.re, r.d[0]), (0.25, -0.0625));
+}

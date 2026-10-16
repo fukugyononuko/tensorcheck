@@ -86,7 +86,7 @@ error[E0277]: component `_0` has the wrong dimension for this vector
 The initial speed (vis-viva, $`v^2 = GM(2/q - 1/a)`$) and the period (Kepler's third law, $`T = 2\pi\sqrt{a^3/GM}`$) stay typed too. A square root halves every exponent of the dimension:
 
 ```rust
-let v_q: Quantity<Velocity> = (2.0 * (gm / q) - gm / a).sqrt();
+let v_q: Quantity<Velocity> = (gm * (2.0 / q - 1.0 / a)).sqrt();
 let period: Quantity<Time> = 2.0 * std::f64::consts::PI * (a.powi::<3>() / gm).sqrt();
 ```
 
