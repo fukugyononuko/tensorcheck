@@ -86,6 +86,7 @@
 | --- | --- | --- |
 | API-40 | `ode::solve_ivp(f, t0..t1, y0, method, tol)` | 1 階の常微分方程式 $`dy/dt = f(t, y)`$ を解く。`f` の戻り値の型は `<Y as VectorSpace>::Per<T>`（$`y`$ ÷ $`[t]`$） |
 | API-41 | （廃止）`ode::solve_second_order` | 2 階の方程式は、状態を $`(x, \dot{x})`$ の組にして `solve_ivp` で解く。シンプレクティック法は将来（FR-29） |
+| API-57 | `DormandPrince54.max_steps(1_000_000)` | どの解法にも使える。歩数の上限を既定の `ode::MAX_STEPS`（100,000）から変える。適応型の解法では棄却した歩も数える。上限に届いたら `MaxSteps`（届いた時刻つき）。`0` なら始点で `MaxSteps`（`f` を呼ばない） |
 | API-42 | `ode::{Rk4 { h }, DormandPrince54, Rosenbrock { jacobian: Jacobian::Numerical }}` | 解法。`Rosenbrock` は RODAS（Hairer & Wanner）。Jacobi 行列は数値微分（利用者が与える形は将来、FR-30） |
 | API-43 | `ode::Tolerance { rtol, atol }` | 許容値。`rtol` は無次元の数、`atol` は状態と同じ型。どちらも有限で 0 以上、成分ごとに少なくとも一方が正（DD-13） |
 | API-44 | `ode::Solution { t, y, stats }`、`ode::SolveError` | 解と、失敗（`MaxSteps`、`StepTooSmall`、`NonFinite`、`Singular`、入力の誤り `InvalidTolerance`・`InvalidStep`・`InvalidSpan`）。`e.time()` で失敗した時刻を取り出せる（入力の誤りでは `None`） |

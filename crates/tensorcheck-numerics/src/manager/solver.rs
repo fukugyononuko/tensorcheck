@@ -180,11 +180,13 @@ pub enum OdeKind {
     Rodas,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn solve_ivp<T, Y, R, F, A, O>(
     mut f: F,
     span: Range<Quantity<T>>,
     y0: Y,
     kind: OdeKind,
+    max_steps: usize,
     rtol: f64,
     atol: &A,
     on_step: &mut O,
@@ -239,7 +241,7 @@ where
         OdeKind::Rk4(h_abs) => {
             let mut w = Work::new(4, n);
             while dir * (t1 - t) > 0.0 {
-                if stats.steps >= crate::ode::MAX_STEPS {
+                if stats.steps >= max_steps {
                     return Err(SolveError::MaxSteps { t: at(t) });
                 }
                 let h = dir * h_abs.min(dir * (t1 - t));
@@ -260,7 +262,7 @@ where
             let mut h = initial_step(&mut rhs, t, &y, &w.k[0], dir, 4, &atol, rtol);
             let mut rejected_last = false;
             while dir * (t1 - t) > 0.0 {
-                if stats.steps + stats.rejected >= crate::ode::MAX_STEPS {
+                if stats.steps + stats.rejected >= max_steps {
                     return Err(SolveError::MaxSteps { t: at(t) });
                 }
                 if h.abs() < 16.0 * f64::EPSILON * t.abs().max(f64::MIN_POSITIVE) {
@@ -309,7 +311,7 @@ where
             let mut h = initial_step(&mut rhs, t, &y, &f0, dir, 3, &atol, rtol);
             let mut rejected_last = false;
             while dir * (t1 - t) > 0.0 {
-                if stats.steps + stats.rejected >= crate::ode::MAX_STEPS {
+                if stats.steps + stats.rejected >= max_steps {
                     return Err(SolveError::MaxSteps { t: at(t) });
                 }
                 if h.abs() < 16.0 * f64::EPSILON * t.abs().max(f64::MIN_POSITIVE) {
