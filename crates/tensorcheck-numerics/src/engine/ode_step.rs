@@ -100,36 +100,40 @@ pub fn dopri5_dense(theta: f64, h: f64, y0: &[f64], y1: &[f64], k: &[Vec<f64>], 
 }
 
 /// A root of `g` on `[0, 1]` by the Illinois method (DD-12, FR-31), given
-/// `g0 = g(0) ≠ 0` and `g1 = g(1)` of the other sign or zero. Returns the end of a
-/// bracket at most `4ε` wide on the side of `g1` (or a zero of `g`), so the root
-/// found is never before the sign change. When two steps in a row do not halve the
-/// bracket, the next step bisects: the bracket halves at least every three steps, so
-/// it always closes within the 200 evaluations allowed (PR #41).
+/// `g0 = g(0) ≠ 0` and `g1 = g(1)` of the other sign or zero. Returns a point where
+/// `g` was evaluated to exactly zero, or the end of a bracket at most `4ε` wide on
+/// the side of `g1`, so the root found is never before the sign change. When two
+/// steps in a row do not halve the bracket, the next step bisects: the bracket
+/// halves at least every three steps, so it always closes within the 200
+/// evaluations allowed (PR #41).
 pub fn illinois<G: FnMut(f64) -> f64 + ?Sized>(g: &mut G, g0: f64, g1: f64) -> f64 {
-    let (mut a, mut ga, mut b, mut gb) = (0.0, g0, 1.0, g1);
-    // Which end was kept last: halve the other end's value when the same end stays twice.
+    // The weights wa, wb start as g(a), g(b) and are halved by the Illinois rule, so
+    // they may underflow to zero: only an evaluated zero ends the search (PR #41).
+    let (mut a, mut wa, mut b, mut wb) = (0.0, g0, 1.0, g1);
+    let mut zero = g1 == 0.0;
+    // Which end was kept last: halve the other end's weight when the same end stays twice.
     let mut kept = 0;
     // The bracket width at the last halving, and the steps since then.
     let (mut halved_at, mut stalled) = (1.0, 0);
     for _ in 0..200 {
-        if gb == 0.0 || b - a <= 4.0 * f64::EPSILON {
+        if zero || b - a <= 4.0 * f64::EPSILON {
             break;
         }
-        let mut c = (a * gb - b * ga) / (gb - ga);
+        let mut c = (a * wb - b * wa) / (wb - wa);
         if stalled >= 2 || !(c > a && c < b) {
             c = 0.5 * (a + b);
         }
         let gc = g(c);
-        if gc == 0.0 || gc.signum() == gb.signum() {
-            (b, gb) = (c, gc);
+        if gc == 0.0 || gc.signum() == g1.signum() {
+            (b, wb, zero) = (c, gc, gc == 0.0);
             if kept == -1 {
-                ga *= 0.5;
+                wa *= 0.5;
             }
             kept = -1;
         } else {
-            (a, ga) = (c, gc);
+            (a, wa) = (c, gc);
             if kept == 1 {
-                gb *= 0.5;
+                wb *= 0.5;
             }
             kept = 1;
         }
@@ -257,6 +261,33 @@ mod tests {
             core::mem::swap(&mut y, &mut y_new);
         }
         (y[0] - 1f64.sin().exp()).abs()
+    }
+
+    #[test]
+    fn illinois_always_returns_a_closed_bracket_or_a_zero() {
+        // TC-U29: the condition itself, for g monotone near the root: g(b) = 0, or
+        // g(b) has the sign of g(1) and g(b − 4ε) the other sign. PR #41 reviews 4 and
+        // 5 (Codex): a ratio of 1e30 between the ends, and a weight that underflows.
+        type Case = (&'static str, fn(f64) -> f64);
+        let cases: [Case; 6] = [
+            ("cubic", |x| x * x * x - 0.2),
+            ("sqrt", |x| x.sqrt() - 0.5),
+            ("x^100", |x| x.powi(100) - 0.5f64.powi(100)),
+            ("exp", |x| (50.0 * x).exp() - 2.0),
+            ("falling", |x| 0.3 - x),
+            ("subnormal", |x| {
+                (x - 0.9) * (-7420.0 * (x - 0.9).max(0.0)).exp()
+            }),
+        ];
+        for (name, g) in cases {
+            let (g0, g1) = (g(0.0), g(1.0));
+            let b = illinois(&mut |x: f64| g(x), g0, g1);
+            let gb = g(b);
+            let closed = gb == 0.0
+                || (gb.signum() == g1.signum()
+                    && g(b - 4.0 * f64::EPSILON).signum() == g0.signum());
+            assert!(closed, "{name}: b = {b}, g(b) = {gb:e}");
+        }
     }
 
     #[test]

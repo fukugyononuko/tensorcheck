@@ -496,6 +496,30 @@ fn a_steep_g_is_still_located() {
 }
 
 #[test]
+fn a_tiny_g_beyond_the_root_does_not_end_the_search() {
+    // PR #41 fifth review (Codex): g(1) = 5e-324; halving that weight gives 0, which
+    // was taken for a root at t = 1. The only root is t = 0.9.
+    let g = |t: Quantity<Time>, _y: &Quantity<Length>| {
+        let x = t.value_in(s) - 0.9;
+        (x * (-7420.0 * x.max(0.0)).exp()) * m
+    };
+    let sol = solve_ivp_events(
+        ramp,
+        (0.0 * s)..(1.0 * s),
+        0.0 * m,
+        Rk4 { h: 1.0 },
+        ramp_tol(),
+        Event::new(g).terminal(),
+    )
+    .unwrap();
+    assert!(
+        (sol.t.value_in(s) - 0.9).abs() < 1e-12,
+        "t = {}",
+        sol.t.value_in(s)
+    );
+}
+
+#[test]
 fn rejected_input_calls_neither_f_nor_g() {
     let (f_calls, g_calls) = (Cell::new(0), Cell::new(0));
     let f = |t: Quantity<Time>, y: &Quantity<Length>| {
