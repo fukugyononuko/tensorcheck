@@ -237,7 +237,8 @@ fn watch<W: Watch + ?Sized, G: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
         return Err(t1);
     }
     *g_before = g1;
-    let changed = g0 * g1 < 0.0 || (g0 != 0.0 && g1 == 0.0);
+    // Compare signs, not the product: g0 g1 underflows to −0 for tiny values (PR #41).
+    let changed = (g0 < 0.0 && g1 >= 0.0) || (g0 > 0.0 && g1 <= 0.0);
     if !changed || !events.wants(g0) {
         return Ok(None);
     }

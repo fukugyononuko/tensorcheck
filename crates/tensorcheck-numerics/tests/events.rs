@@ -197,6 +197,28 @@ fn zero_at_a_step_end_is_found_once_and_zero_at_the_start_is_not_an_event() {
 }
 
 #[test]
+fn tiny_values_of_g_are_compared_by_sign_not_by_product() {
+    // PR #41 review (Codex): g(0) g(0.75) = −0.5e-300 × 0.25e-300 underflows to −0.
+    for scale in [1e-300, 1e300] {
+        let g = move |_t: Quantity<Time>, y: &Quantity<Length>| (*y - 0.5 * m) * scale;
+        let sol = solve_ivp_events(
+            ramp,
+            (0.0 * s)..(1.0 * s),
+            0.0 * m,
+            Rk4 { h: 0.75 },
+            ramp_tol(),
+            Event::new(g),
+        )
+        .unwrap();
+        assert_eq!(sol.events.len(), 1, "scale {scale:e}");
+        assert!(
+            (sol.events[0].t.value_in(s) - 0.5).abs() < 1e-12,
+            "scale {scale:e}"
+        );
+    }
+}
+
+#[test]
 fn backward_in_time_the_signs_are_read_along_the_solve() {
     // From t = 1 s back to 0: y − 0.3 m goes from positive to negative.
     let g = |_t: Quantity<Time>, y: &Quantity<Length>| *y - 0.3 * m;
