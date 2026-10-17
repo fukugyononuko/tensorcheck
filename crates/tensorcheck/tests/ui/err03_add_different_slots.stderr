@@ -1,9 +1,0 @@
-error[E0277]: cannot add tensors with different index structure
- --> tests/ui/err03_add_different_slots.rs:9:15
-  |
-9 |     let _ = v + w;
-  |               ^ this tensor has different indices
-  |
-  = help: the trait `SameSlots<Cons<Down<Cartesian>, Nil>>` is not implemented for `Cons<Up<Cartesian>, Nil>`
-  = note: rank, index positions (upper/lower) and coordinate systems must all match
-  = note: required for `Tensor<Dim<Si, Cons<Pos<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Nil>>>>>>>>, Cons<Up<Cartesian>, Nil>>` to implement `Add<Tensor<Dim<Si, Cons<Pos<tensorcheck::utility::typelevel::S<tensorcheck::utility::typelevel::Z>>, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Cons<tensorcheck::utility::typelevel::Zero, Nil>>>>>>>>, Cons<Down<Cartesian>, Nil>>>`

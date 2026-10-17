@@ -257,7 +257,7 @@ impl Metric for SphereMetric {
 | USE-01 | Rust の言語と標準ライブラリ（std） | すべて | 実行時 | `rust-toolchain.toml` で固定（1.99.0）。MSRV は OPEN-05 |
 | USE-02 | コンパイラの診断機能 `#[diagnostic::on_unimplemented]` | エラー文（ERR） | コンパイル時 | USE-01 に含まれる（Rust 1.78 で安定化） |
 | USE-03 | Cargo の workspace | 2 つのクレートの構成（01 §1.8） | 開発 | USE-01 に含まれる |
-| USE-04 | コンパイル失敗のテスト用のクレート（trybuild） | ERR の文をテストする（NFR-08） | 開発だけ（`dev-dependencies`） | Dependabot で更新 |
+| USE-04 | Cargo の機械向けの出力（`--message-format=json`） | ERR の文をテストする（NFR-08）。以前の trybuild は issue #24 で外した | 開発だけ（テスト） | USE-01 に含まれる |
 | USE-05 | ベンチマーク用のクレート（criterion を候補とする） | NFR-02、NFR-04 の計測 | 開発だけ | 04 で決める |
 | USE-06 | GitHub Actions | CI（fmt、clippy、test、doc、検査スクリプト） | 開発 | Action はコミット SHA で固定（NFR-14） |
 | USE-07 | Python 3 | 検査スクリプト（個人情報、ワークフロー、呼び出しの規則） | 開発 | GitHub の実行環境のもの |
