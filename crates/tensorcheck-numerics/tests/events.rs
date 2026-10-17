@@ -368,6 +368,85 @@ fn non_finite_g_is_a_failure_with_its_time() {
     assert!(t > 0.4 && t < 0.45, "t = {t}");
 }
 
+// PR #41 review (Codex): f evaluated only for the interpolation must be finite too.
+type Pair = (Quantity<Length>, Quantity<Length>);
+
+#[test]
+fn non_finite_f_at_the_step_end_is_a_failure_for_rk4() {
+    // x' = x, z' = NaN only for 2.70 m ≤ x < 2.72 m: the RK4 stages miss the band,
+    // the extra f(t1, y1) for the event (x(1) ≈ 2.708 m) does not.
+    let f = |_t: Quantity<Time>, y: &Pair| {
+        let x = y.0.value_in(m);
+        let dz = if (2.70..2.72).contains(&x) {
+            f64::NAN
+        } else {
+            0.0
+        };
+        (y.0 / (1.0 * s), dz * (m / s))
+    };
+    let tol = Tolerance {
+        rtol: 1e-9,
+        atol: (1e-12 * m, 1e-12 * m),
+    };
+    let event = Event::new(|_t: Quantity<Time>, y: &Pair| y.0 - 2.0 * m).terminal();
+    let r = solve_ivp_events(
+        f,
+        (0.0 * s)..(1.0 * s),
+        (1.0 * m, 0.0 * m),
+        Rk4 { h: 1.0 },
+        tol,
+        event,
+    );
+    assert!(
+        matches!(r, Err(SolveError::NonFinite { t }) if t.value_in(s) == 1.0),
+        "{r:?}"
+    );
+}
+
+#[test]
+fn non_finite_f_at_the_step_end_is_a_failure_for_rosenbrock() {
+    // First find the first accepted point (t1, y1) without NaN; then make z' NaN
+    // exactly there, so only the f(t1, y1) computed after acceptance is not finite.
+    let tol = Tolerance {
+        rtol: 1e-6,
+        atol: (1e-9 * m, 1e-9 * m),
+    };
+    let clean = |_t: Quantity<Time>, y: &Pair| (y.0 / (1.0 * s), 0.0 * (m / s));
+    let mut first = None;
+    solve_ivp_events_with(
+        clean,
+        (0.0 * s)..(1.0 * s),
+        (1.0 * m, 0.0 * m),
+        ROSENBROCK,
+        tol,
+        Event::new(|_t: Quantity<Time>, y: &Pair| y.0 - 2.0 * m),
+        |t, y: &Pair| {
+            first.get_or_insert((t.value_in(s), y.0.value_in(m)));
+        },
+    )
+    .unwrap();
+    let (t1, x1) = first.unwrap();
+    // The event must fall in the first step for the interpolation to use f(t1, y1).
+    let level = 1.0 + 0.5 * (x1 - 1.0);
+    let f = move |t: Quantity<Time>, y: &Pair| {
+        let hit = t.value_in(s) == t1 && y.0.value_in(m) == x1;
+        (y.0 / (1.0 * s), if hit { f64::NAN } else { 0.0 } * (m / s))
+    };
+    let event = Event::new(move |_t: Quantity<Time>, y: &Pair| y.0 - level * m).terminal();
+    let r = solve_ivp_events(
+        f,
+        (0.0 * s)..(1.0 * s),
+        (1.0 * m, 0.0 * m),
+        ROSENBROCK,
+        tol,
+        event,
+    );
+    assert!(
+        matches!(r, Err(SolveError::NonFinite { t }) if t.value_in(s) == t1),
+        "{r:?}"
+    );
+}
+
 #[test]
 fn rejected_input_calls_neither_f_nor_g() {
     let (f_calls, g_calls) = (Cell::new(0), Cell::new(0));

@@ -244,6 +244,8 @@ fn watch<W: Watch + ?Sized, G: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
     }
     let mut computed = Vec::new();
     let h = t1 - t0;
+    // What the interpolant is built from must be finite, like the state (PR #41).
+    let finite = |v: &[f64]| v.iter().all(|x| x.is_finite());
     let interpolate = match dense {
         Dense::Hermite(f0, f1) => {
             let f1 = match f1 {
@@ -254,10 +256,16 @@ fn watch<W: Watch + ?Sized, G: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
                     &computed
                 }
             };
+            if !finite(f1) {
+                return Err(t1);
+            }
             Box::new(move |theta: f64, out: &mut [f64]| hermite(theta, h, y0, f0, y1, f1, out))
                 as Box<dyn Fn(f64, &mut [f64]) + '_>
         }
         Dense::Dopri5(k) => {
+            if !k.iter().all(|ki| finite(ki)) {
+                return Err(t1);
+            }
             Box::new(move |theta: f64, out: &mut [f64]| dopri5_dense(theta, h, y0, y1, k, out))
         }
     };
