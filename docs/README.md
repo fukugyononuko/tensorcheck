@@ -31,6 +31,7 @@ tensorcheck の設計ドキュメント一式。
 
 - 設計ドキュメントは 1 文書につき 1 つの PR にする。前の PR がマージされるまで、次の PR は作らない。
 - 各フェーズの完了時に振り返りを行い、`docs/retrospectives/` に記録する。
+- テストで単位と同じ名前（`m`、`s`、`one` など）を変数に使うときは、単位をモジュールごと import する（`use tensorcheck::units::si as u;` と書き、`u::m` で参照する）。単位はユニット構造体なので、同じ名前の `let` はパターンとして読まれ、コンパイルエラーになる（振り返り 2026-10-17 の T-04）。
 - 開発の決まりは、ホームページの [開発の決まり](https://github.com/fukugyononuko/fukugyononuko.github.io/blob/main/docs/README.md#開発の決まり) に従う。
 
 ## ID の規則
