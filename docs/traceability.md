@@ -27,7 +27,7 @@ flowchart LR
 | BR-03 誤りの内容がわかる | FR-03, FR-13, FR-14 | NFR-04, NFR-05, NFR-06, NFR-07, NFR-08 |
 | BR-04 書き換えずに対応できる | FR-02, FR-03, FR-04, FR-05, FR-09, FR-11, FR-16, FR-25, FR-28 | NFR-01, NFR-10, NFR-11 |
 | BR-05 遅くしない | FR-17 | NFR-01, NFR-02, NFR-03, NFR-12 |
-| BR-06 数値計算でも検査を保つ | FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-29, FR-30 | NFR-09 |
+| BR-06 数値計算でも検査を保つ | FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-29, FR-30, FR-31 | NFR-09 |
 | BR-07 個人情報を含めない | — | NFR-13, NFR-14 |
 
 ## T.2 機能要件 → コアユースケース
@@ -56,6 +56,7 @@ flowchart LR
 | FR-20 定積分 | UC-08 | 初期 |
 | FR-21 数値微分 | UC-07 | 初期 |
 | FR-22 誤差の許容値と失敗の知らせ | UC-07, UC-08 | 初期 |
+| FR-31 イベント検出 | UC-07 | 初期 |
 | FR-23 陰的解法（Radau IIA・BDF） | — | 将来 |
 | FR-24 無限区間・多次元の積分 | — | 将来 |
 | FR-25 テンソル場 | UC-09 | 初期 |
@@ -110,6 +111,7 @@ flowchart LR
 | FR-20 定積分 | CMP-M02, CMP-E06, CMP-E07, CMP-U05 |
 | FR-21 数値微分 | CMP-M02, CMP-E08 |
 | FR-22 誤差の許容値と失敗の知らせ | CMP-M02, CMP-E06 |
+| FR-31 イベント検出 | CMP-M02, CMP-E05 |
 | FR-23 陰的解法（Radau IIA・BDF） | CMP-E05, CMP-U04（将来） |
 | FR-24 無限区間・多次元の積分 | CMP-E07（将来） |
 | FR-25 テンソル場 | CMP-M03, CMP-E08 |
@@ -158,13 +160,13 @@ flowchart LR
 | 構成要素 | 変動性 | 要件 | CC |
 | --- | --- | --- | --- |
 | CMP-M01 TensorManager | VOL-13 | FR-01, FR-03, FR-06〜FR-12 | CC-01〜CC-05 |
-| CMP-M02 SolverManager | VOL-13 | FR-18〜FR-22 | CC-07, CC-08 |
+| CMP-M02 SolverManager | VOL-13 | FR-18〜FR-22, FR-31 | CC-07, CC-08 |
 | CMP-M03 GeometryManager | VOL-13 | FR-15, FR-25〜FR-27 | CC-09 |
 | CMP-E01 DimensionEngine | VOL-01, VOL-02 | FR-01〜FR-03, FR-06, FR-08, FR-12 | CC-01〜CC-03, CC-05, CC-09 |
 | CMP-E02 IndexEngine | VOL-03, VOL-04 | FR-04〜FR-09, FR-11, FR-12, FR-15, FR-26, FR-27 | CC-02〜CC-05, CC-09 |
 | CMP-E03 MetricEngine | VOL-05 | FR-09, FR-26, FR-27 | CC-02, CC-03, CC-09 |
 | CMP-E04 SymmetryEngine | VOL-06 | FR-08, FR-10, FR-27 | CC-03〜CC-05, CC-09 |
-| CMP-E05 OdeStepEngine | VOL-07 | FR-18, FR-19, FR-23 | CC-07 |
+| CMP-E05 OdeStepEngine | VOL-07 | FR-18, FR-19, FR-23, FR-31 | CC-07 |
 | CMP-E06 ErrorControlEngine | VOL-08 | FR-18〜FR-20, FR-22 | CC-07, CC-08 |
 | CMP-E07 QuadratureEngine | VOL-09 | FR-20, FR-24 | CC-08 |
 | CMP-E08 DifferentiationEngine | VOL-10 | FR-15, FR-16, FR-19, FR-21, FR-25〜FR-27 | CC-07, CC-09 |
@@ -201,6 +203,7 @@ flowchart LR
 | FR-20 定積分 | API-14, API-46, API-47, API-48 | EXT-07 | — |
 | FR-21 数値微分 | API-15, API-49 | EXT-07 | — |
 | FR-22 誤差の許容値と失敗の知らせ | API-43, API-44, API-47, API-48, API-57 | — | ERR-15 |
+| FR-31 イベント検出 | API-58, API-59 | — | ERR-14, ERR-15 |
 | FR-25 テンソル場 | API-55 | EXT-08 | ERR-18 |
 | FR-26 Christoffel 記号 | API-16, API-50, API-51, API-53 | EXT-06 | ERR-16, ERR-17, ERR-19 |
 | FR-27 曲率 | API-16, API-52, API-53 | EXT-06 | — |
@@ -222,7 +225,7 @@ flowchart LR
 | DD-09 数値の型と自動微分 | CMP-U02, CMP-E08 | FR-16, FR-25 |
 | DD-10 接続と曲率、共変微分 | CMP-E09, CMP-M03 | FR-15, FR-26, FR-27 |
 | DD-11 数値解法の状態 | CMP-U05 | FR-18, FR-20 |
-| DD-12 常微分方程式の解法 | CMP-E05, CMP-M02 | FR-18, FR-19 |
+| DD-12 常微分方程式の解法 | CMP-E05, CMP-M02 | FR-18, FR-19, FR-31 |
 | DD-13 誤差の測り方と刻み幅の調整 | CMP-E06 | FR-18, FR-20, FR-22 |
 | DD-14 定積分 | CMP-E07, CMP-M02 | FR-20 |
 | DD-15 差分による数値微分 | CMP-E08 | FR-19, FR-21 |
@@ -257,6 +260,7 @@ flowchart LR
 | FR-20 定積分 | TC-U21, TC-U22, TC-I07, TC-E06 |
 | FR-21 数値微分 | TC-U26 |
 | FR-22 誤差の許容値と失敗の知らせ | TC-U20, TC-U27, TC-U28 |
+| FR-31 イベント検出 | TC-U29, TC-E10 |
 | FR-25 テンソル場 | TC-U12 |
 | FR-26 Christoffel 記号 | TC-U10, TC-U14, TC-F16, TC-F17, TC-F20 |
 | FR-27 曲率 | TC-U11, TC-U14, TC-U15, TC-U16, TC-I08, TC-E07 |

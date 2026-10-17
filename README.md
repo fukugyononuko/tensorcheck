@@ -55,7 +55,7 @@ See the [gravity examples](docs/examples.md) for the full code, figures and chec
 | Expressions | Einstein-convention contraction with labels (`t.idx((a, b)) * v.idx(b)`), traces, outer products, raising and lowering with a metric tensor, chart transforms |
 | Geometry | Christoffel symbols, Riemann, Ricci, Einstein tensors, scalar curvature and covariant derivatives from the metric tensor alone, with exact derivatives by dual numbers |
 | Field spaces | the same machinery for field-space tensors and mixed objects such as `∂_μ φ^I` |
-| Numerics (`tensorcheck-numerics`) | ODEs (RK4, Dormand–Prince 5(4), Rosenbrock RODAS for stiff systems), quadrature (trapezoid, Simpson, Romberg, Gauss–Legendre, adaptive Gauss–Kronrod), numerical derivatives — all keeping dimensions |
+| Numerics (`tensorcheck-numerics`) | ODEs (RK4, Dormand–Prince 5(4), Rosenbrock RODAS for stiff systems) with event detection, quadrature (trapezoid, Simpson, Romberg, Gauss–Legendre, adaptive Gauss–Kronrod), numerical derivatives — all keeping dimensions |
 
 Shipped spaces: the plane (Cartesian, polar), 3D Euclidean space (Cartesian, spherical, cylindrical), Minkowski spacetime `(+, −, −, −)`, the two-sphere (angular, stereographic).
 
@@ -106,7 +106,7 @@ Contraction plans are computed at compile time for each combination of types, so
 - Connections are Levi-Civita in a coordinate basis (no torsion, no orthonormal frames yet).
 - `transform` needs every index in the source chart.
 - The Rosenbrock solver uses a numerical Jacobian; user-supplied Jacobians are planned.
-- ODE solvers have no event detection (stopping when a condition is met).
+- Event detection takes one condition per solve, and misses two sign changes within one step.
 - Requires `std` (no `no_std` yet).
 
 ## How it differs from existing crates

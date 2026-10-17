@@ -1,0 +1,385 @@
+//! Event detection (issue #21). TC-U29.
+
+use std::cell::Cell;
+use std::f64::consts::PI;
+
+use tensorcheck::Quantity;
+use tensorcheck::units::si::{Acceleration, Length, Time, Velocity, m, s};
+use tensorcheck_numerics::ode::{
+    DormandPrince54, Event, Jacobian, Method, Rk4, Rosenbrock, SolveError, Tolerance, solve_ivp,
+    solve_ivp_events, solve_ivp_events_with,
+};
+
+type Osc = (Quantity<Length>, Quantity<Velocity>);
+
+const ROSENBROCK: Rosenbrock = Rosenbrock {
+    jacobian: Jacobian::Numerical,
+};
+
+/// x'' = −x with ω = 1/s and x(0) = 1 m: x = cos t crosses zero at π/2 (falling),
+/// 3π/2 (rising) and 5π/2 (falling) before 8 s.
+fn oscillator(_t: Quantity<Time>, y: &Osc) -> (Quantity<Velocity>, Quantity<Acceleration>) {
+    (y.1, -y.0 / (1.0 * (s * s)))
+}
+
+fn position(_t: Quantity<Time>, y: &Osc) -> Quantity<Length> {
+    y.0
+}
+
+/// The events of `event` on the oscillator up to 8 s, as (t, x, v) in s, m, m/s.
+fn oscillator_events<M: Method, G>(method: M, rtol: f64, event: Event<G>) -> Vec<(f64, f64, f64)>
+where
+    G: FnMut(Quantity<Time>, &Osc) -> Quantity<Length>,
+{
+    let tol = Tolerance {
+        rtol,
+        atol: (rtol * m, rtol * (m / s)),
+    };
+    let y0 = (1.0 * m, 0.0 * (m / s));
+    let sol = solve_ivp_events(oscillator, (0.0 * s)..(8.0 * s), y0, method, tol, event).unwrap();
+    assert_eq!(sol.t.value_in(s), 8.0);
+    sol.events
+        .iter()
+        .map(|e| (e.t.value_in(s), e.y.0.value_in(m), e.y.1.value_in(m / s)))
+        .collect()
+}
+
+/// The largest error of the event times against `want`, after checking that the
+/// state at each event is on the solution: x = 0 and v = −sin t.
+fn time_error(events: &[(f64, f64, f64)], want: &[f64], v_tol: f64) -> f64 {
+    assert_eq!(events.len(), want.len(), "{events:?}");
+    let mut worst: f64 = 0.0;
+    for (&(t, x, v), &w) in events.iter().zip(want) {
+        assert!(x.abs() < 1e-15, "x = {x} at t = {t}");
+        assert!((v + w.sin()).abs() <= v_tol, "v = {v} at t = {t}");
+        worst = worst.max((t - w).abs());
+    }
+    worst
+}
+
+#[test]
+fn adaptive_methods_find_the_zeros_within_the_tolerance() {
+    // Global error ≤ 10 × tolerance, as in TC-U23.
+    let want = [0.5 * PI, 1.5 * PI, 2.5 * PI];
+    for rtol in [1e-6, 1e-9, 1e-12] {
+        let e = time_error(
+            &oscillator_events(DormandPrince54, rtol, Event::new(position)),
+            &want,
+            10.0 * rtol,
+        );
+        assert!(e <= 10.0 * rtol, "Dormand–Prince rtol {rtol}: {e:e}");
+    }
+    for rtol in [1e-6, 1e-9] {
+        let e = time_error(
+            &oscillator_events(ROSENBROCK, rtol, Event::new(position)),
+            &want,
+            10.0 * rtol,
+        );
+        assert!(e <= 10.0 * rtol, "Rosenbrock rtol {rtol}: {e:e}");
+    }
+}
+
+#[test]
+fn rk4_event_times_are_fourth_order() {
+    // The interpolant must not lower the order of RK4: halving h divides the error by 16.
+    let want = [0.5 * PI, 1.5 * PI, 2.5 * PI];
+    let error = |h: f64| {
+        time_error(
+            &oscillator_events(Rk4 { h }, 1e-9, Event::new(position)),
+            &want,
+            1e-4,
+        )
+    };
+    let order = (error(0.1) / error(0.05)).log2();
+    assert!((order - 4.0).abs() <= 0.2, "order {order}");
+}
+
+#[test]
+fn direction_selects_the_crossings() {
+    fn check<M: Method>(name: &str, method: M) {
+        let times = |event| -> Vec<f64> {
+            let ev = oscillator_events(method, 1e-9, event);
+            ev.iter().map(|e| e.0).collect()
+        };
+        let close = |got: Vec<f64>, want: &[f64]| {
+            got.len() == want.len() && got.iter().zip(want).all(|(g, w)| (g - w).abs() < 1e-6)
+        };
+        let g: fn(Quantity<Time>, &Osc) -> Quantity<Length> = position;
+        assert!(
+            close(times(Event::new(g).rising()), &[1.5 * PI]),
+            "{name} rising"
+        );
+        assert!(
+            close(times(Event::new(g).falling()), &[0.5 * PI, 2.5 * PI]),
+            "{name} falling"
+        );
+    }
+    check("Rk4", Rk4 { h: 0.01 });
+    check("Dormand–Prince", DormandPrince54);
+    check("Rosenbrock", ROSENBROCK);
+}
+
+#[test]
+fn terminal_event_stops_the_solve() {
+    fn check<M: Method>(name: &str, method: M) {
+        let tol = Tolerance {
+            rtol: 1e-9,
+            atol: (1e-9 * m, 1e-9 * (m / s)),
+        };
+        let mut seen = Vec::new();
+        let sol = solve_ivp_events_with(
+            oscillator,
+            (0.0 * s)..(8.0 * s),
+            (1.0 * m, 0.0 * (m / s)),
+            method,
+            tol,
+            Event::new(position).terminal(),
+            |t, y: &Osc| seen.push((t.value_in(s), y.0.value_in(m))),
+        )
+        .unwrap();
+        assert_eq!(sol.events.len(), 1, "{name}");
+        let e = &sol.events[0];
+        assert!((e.t.value_in(s) - 0.5 * PI).abs() < 1e-6, "{name}");
+        // The solution ends at the event, and on_step sees it last.
+        assert_eq!(sol.t.value_in(s), e.t.value_in(s), "{name}");
+        assert_eq!(sol.y.0.value_in(m), e.y.0.value_in(m), "{name}");
+        assert_eq!(
+            *seen.last().unwrap(),
+            (e.t.value_in(s), e.y.0.value_in(m)),
+            "{name}"
+        );
+        assert!(seen.iter().all(|&(t, _)| t <= e.t.value_in(s)), "{name}");
+        assert_eq!(sol.stats.steps, seen.len(), "{name}");
+    }
+    check("Rk4", Rk4 { h: 0.01 });
+    check("Dormand–Prince", DormandPrince54);
+    check("Rosenbrock", ROSENBROCK);
+}
+
+// y = t (in metres per second): steps of 0.25 s are exact in binary.
+fn ramp(_t: Quantity<Time>, _y: &Quantity<Length>) -> Quantity<Velocity> {
+    1.0 * (m / s)
+}
+
+fn ramp_tol() -> Tolerance<Quantity<Length>> {
+    Tolerance {
+        rtol: 1e-9,
+        atol: 1e-12 * m,
+    }
+}
+
+#[test]
+fn zero_at_a_step_end_is_found_once_and_zero_at_the_start_is_not_an_event() {
+    let at_half = Event::new(|_t: Quantity<Time>, y: &Quantity<Length>| *y - 0.5 * m);
+    let sol = solve_ivp_events(
+        ramp,
+        (0.0 * s)..(1.0 * s),
+        0.0 * m,
+        Rk4 { h: 0.25 },
+        ramp_tol(),
+        at_half,
+    )
+    .unwrap();
+    let times: Vec<f64> = sol.events.iter().map(|e| e.t.value_in(s)).collect();
+    assert_eq!(times, [0.5]);
+
+    let at_start = Event::new(|_t: Quantity<Time>, y: &Quantity<Length>| *y);
+    let sol = solve_ivp_events(
+        ramp,
+        (0.0 * s)..(1.0 * s),
+        0.0 * m,
+        Rk4 { h: 0.25 },
+        ramp_tol(),
+        at_start,
+    )
+    .unwrap();
+    assert!(sol.events.is_empty());
+}
+
+#[test]
+fn backward_in_time_the_signs_are_read_along_the_solve() {
+    // From t = 1 s back to 0: y − 0.3 m goes from positive to negative.
+    let g = |_t: Quantity<Time>, y: &Quantity<Length>| *y - 0.3 * m;
+    for (name, falling, rising) in [
+        (
+            "Rk4",
+            solve_ivp_events(
+                ramp,
+                (1.0 * s)..(0.0 * s),
+                1.0 * m,
+                Rk4 { h: 0.25 },
+                ramp_tol(),
+                Event::new(g).falling(),
+            ),
+            solve_ivp_events(
+                ramp,
+                (1.0 * s)..(0.0 * s),
+                1.0 * m,
+                Rk4 { h: 0.25 },
+                ramp_tol(),
+                Event::new(g).rising(),
+            ),
+        ),
+        (
+            "Dormand–Prince",
+            solve_ivp_events(
+                ramp,
+                (1.0 * s)..(0.0 * s),
+                1.0 * m,
+                DormandPrince54,
+                ramp_tol(),
+                Event::new(g).falling(),
+            ),
+            solve_ivp_events(
+                ramp,
+                (1.0 * s)..(0.0 * s),
+                1.0 * m,
+                DormandPrince54,
+                ramp_tol(),
+                Event::new(g).rising(),
+            ),
+        ),
+        (
+            "Rosenbrock",
+            solve_ivp_events(
+                ramp,
+                (1.0 * s)..(0.0 * s),
+                1.0 * m,
+                ROSENBROCK,
+                ramp_tol(),
+                Event::new(g).falling(),
+            ),
+            solve_ivp_events(
+                ramp,
+                (1.0 * s)..(0.0 * s),
+                1.0 * m,
+                ROSENBROCK,
+                ramp_tol(),
+                Event::new(g).rising(),
+            ),
+        ),
+    ] {
+        let falling = falling.unwrap();
+        assert_eq!(falling.events.len(), 1, "{name}");
+        assert!(
+            (falling.events[0].t.value_in(s) - 0.3).abs() < 1e-12,
+            "{name}"
+        );
+        assert!(rising.unwrap().events.is_empty(), "{name}");
+    }
+}
+
+#[test]
+fn rk4_evaluates_f_once_more_only_in_a_step_with_an_event() {
+    let solve = |level: f64| {
+        let g = move |_t: Quantity<Time>, y: &Quantity<Length>| *y - level * m;
+        solve_ivp_events(
+            ramp,
+            (0.0 * s)..(1.0 * s),
+            0.0 * m,
+            Rk4 { h: 0.25 },
+            ramp_tol(),
+            Event::new(g),
+        )
+        .unwrap()
+    };
+    // Four steps of four evaluations each.
+    assert_eq!(solve(2.0).stats.evaluations, 16);
+    assert_eq!(solve(0.3).stats.evaluations, 17);
+}
+
+#[test]
+fn adaptive_methods_evaluate_f_no_more_with_events() {
+    // Dormand–Prince and RODAS already have f at the end of the step.
+    fn check<M: Method>(name: &str, method: M) {
+        let tol = Tolerance {
+            rtol: 1e-9,
+            atol: (1e-9 * m, 1e-9 * (m / s)),
+        };
+        let y0 = (1.0 * m, 0.0 * (m / s));
+        let plain = solve_ivp(oscillator, (0.0 * s)..(8.0 * s), y0, method, tol).unwrap();
+        let with = solve_ivp_events(
+            oscillator,
+            (0.0 * s)..(8.0 * s),
+            y0,
+            method,
+            tol,
+            Event::new(position),
+        )
+        .unwrap();
+        assert_eq!(with.events.len(), 3, "{name}");
+        assert_eq!(with.stats, plain.stats, "{name}");
+    }
+    check("Dormand–Prince", DormandPrince54);
+    check("Rosenbrock", ROSENBROCK);
+}
+
+#[test]
+fn non_finite_g_is_a_failure_with_its_time() {
+    let solve = |g: &dyn Fn(f64, f64) -> f64| {
+        let event = Event::new(|t: Quantity<Time>, y: &Quantity<Length>| {
+            g(t.value_in(s), y.value_in(m)) * m
+        });
+        solve_ivp_events(
+            ramp,
+            (0.0 * s)..(1.0 * s),
+            0.0 * m,
+            Rk4 { h: 0.25 },
+            ramp_tol(),
+            event,
+        )
+    };
+    // At the start, at the end of the second step, and only inside the step with the
+    // root (0.4 s < t < 0.45 s, root at 0.42 s), where the interpolant is searched.
+    let at_start = solve(&|_, _| f64::NAN);
+    assert!(matches!(at_start, Err(SolveError::NonFinite { t }) if t.value_in(s) == 0.0));
+    let at_step = solve(&|t, _| if t > 0.3 { f64::INFINITY } else { 1.0 });
+    assert!(matches!(at_step, Err(SolveError::NonFinite { t }) if t.value_in(s) == 0.5));
+    let inside = solve(&|t, y| {
+        if t > 0.4 && t < 0.45 {
+            f64::NAN
+        } else {
+            y - 0.42
+        }
+    });
+    let t = inside.unwrap_err().time().unwrap().value_in(s);
+    assert!(t > 0.4 && t < 0.45, "t = {t}");
+}
+
+#[test]
+fn rejected_input_calls_neither_f_nor_g() {
+    let (f_calls, g_calls) = (Cell::new(0), Cell::new(0));
+    let f = |t: Quantity<Time>, y: &Quantity<Length>| {
+        f_calls.set(f_calls.get() + 1);
+        ramp(t, y)
+    };
+    let event = || {
+        Event::new(|_t: Quantity<Time>, y: &Quantity<Length>| {
+            g_calls.set(g_calls.get() + 1);
+            *y
+        })
+    };
+    let bad_tol = Tolerance {
+        rtol: -1.0,
+        atol: 1e-12 * m,
+    };
+    let r = solve_ivp_events(
+        f,
+        (0.0 * s)..(1.0 * s),
+        0.0 * m,
+        DormandPrince54,
+        bad_tol,
+        event(),
+    );
+    assert!(matches!(r, Err(SolveError::InvalidTolerance)));
+    let r = solve_ivp_events(
+        f,
+        (0.0 * s)..(1.0 * s),
+        0.0 * m,
+        DormandPrince54.max_steps(0),
+        ramp_tol(),
+        event(),
+    );
+    assert!(matches!(r, Err(SolveError::MaxSteps { t }) if t.value_in(s) == 0.0));
+    assert_eq!((f_calls.get(), g_calls.get()), (0, 0));
+}
