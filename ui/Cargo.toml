@@ -1,0 +1,14 @@
+# Compile-fail cases (TC-F, DD-16). Each file in src/bin is one case; the comment lines
+# `// expect: …` give the headlines it must produce. Outside the workspace on purpose:
+# the cases do not compile. Checked by crates/tensorcheck/tests/compile_fail.rs.
+[package]
+name = "tensorcheck-ui"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+tensorcheck = { path = "../crates/tensorcheck" }
+tensorcheck-numerics = { path = "../crates/tensorcheck-numerics" }
+
+[workspace]

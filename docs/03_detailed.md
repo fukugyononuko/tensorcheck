@@ -31,7 +31,7 @@
 ## 3.1 DD-01 ファイル配置と呼び出しの規則
 
 ```text
-Cargo.toml                      workspace（members: crates/*）
+Cargo.toml                      workspace（members: crates/*、exclude: ui）
 crates/
   tensorcheck/
     src/
@@ -46,7 +46,7 @@ crates/
       spaces/    euclid3.rs polar.rs minkowski.rs sphere2.rs  API-11
       labels.rs  macros.rs
       internal.rs                                tensorcheck-numerics 向け（#[doc(hidden)]）
-    tests/        ui/（コンパイル失敗のテスト）, *.rs
+    tests/        *.rs（compile_fail.rs は ui/ のケースを検査する）
     examples/
   tensorcheck-numerics/
     src/
@@ -54,6 +54,8 @@ crates/
       manager/   solver.rs                       M02
       engine/    ode_step.rs error_control.rs quadrature.rs  E05〜E07
     tests/  examples/  benches/
+ui/                             コンパイル失敗のケース（TC-F、DD-16）。ワークスペースの外
+  src/bin/   err01_….rs 〜 err22_….rs, pass_correct_expressions.rs
 scripts/  check_privacy.py check_workflows.py check_layers.py test_check_layers.py
 ```
 
@@ -447,7 +449,9 @@ ERR ごとに専用の trait を 1 つ置き、`#[diagnostic::on_unimplemented]`
   - **おとりの実装**：`impl<D> SameDimension<D> for D` のように実装が 1 つだけだと、コンパイラはそれを使ってもう一方の型を推論してしまい、「型が合わない」（E0308）という別のエラーになる。決して使われない型 `Decoy<T>` への実装を 1 つ足すと、推論が先に決まらず、見出しのとおりのエラーになる。
   - **真偽値での判定**：射影（`U::Dim` など）を含む比較では、おとりの実装がほかの実装と重なると判定される。その場合は、等しいかを型レベルの真偽値（`DimEq` など）で計算し、`True` にだけ実装した trait に見出しを付ける。
 - 文は 2a §2a.4 のとおり。`{L}` などには、ラベル・座標系・単位の型の名前が入るように、その型を trait の型引数にする。
-- 各 ERR について、コンパイル失敗のテスト（`tests/ui/*.rs` と、期待する出力 `*.stderr`）を置く（04 の TC-F）。trybuild は出力全体を比べる（見出しの行だけを比べる仕組みはない）。Rust の版は `rust-toolchain.toml` で固定しているので、版を上げたときだけ `TRYBUILD=overwrite` で出力を更新し、見出しが変わっていないことを差分で確かめる。
+- 各 ERR について、コンパイル失敗のケースを `ui/src/bin/` に置く（04 の TC-F）。期待する見出しはケースの先頭のコメント（`// expect: …`）に書く。ERR-18 はコンパイラ自身のエラーなので `// expect: any error`、正しい式は `// expect: compiles`。
+- 検査（`crates/tensorcheck/tests/compile_fail.rs`）は、`ui/` を `cargo check --bins --keep-going --message-format=json` で 1 回だけ検査し、Cargo の JSON の各行から、ケースの名前（`target.name`）と人が読む形のエラー文（`message.rendered`）の 1 行目を取り出して、期待する見出しの並びと比べる。JSON のライブラリは使わず、必要な文字列だけを読む小さな関数を置く（依存を持たない方針。その関数自身もテストする）。`ui/` は、わざとコンパイルできないので、ワークスペースから外す（`exclude`）。結果は `target/ui/` に置く。
+- 以前は trybuild で出力全体を比べていた。出力にライブラリのソースの抜粋が入るので、ライブラリのソースを変えるたびに出力を作り直していた（実装の振り返り P-06、約 8 回）。見出しだけを比べる形に変えた（issue #24）。ほかの案（trybuild に短い出力の形式を渡す、`ui_test`、`compiletest_rs`、doctest の `compile_fail`）は、確かでない・依存が多い・nightly が要る・エラーの番号しか比べられない、のため採らなかった。
 
 ## 3.17 DD-17 失敗の型（M02、U04）
 

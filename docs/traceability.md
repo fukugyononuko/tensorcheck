@@ -282,7 +282,7 @@ flowchart LR
 | USE-01 Rust と std | NFR-01 |
 | USE-02 診断機能 | FR-13, NFR-05 |
 | USE-03 workspace | NFR-01（01 §1.8） |
-| USE-04 コンパイル失敗のテスト | NFR-08 |
+| USE-04 Cargo の JSON 出力（コンパイル失敗のテスト） | NFR-08 |
 | USE-05 ベンチマーク | NFR-02, NFR-04 |
 | USE-06 GitHub Actions | NFR-11, NFR-13, NFR-14 |
 | USE-07 Python 3 | NFR-11, NFR-13 |
