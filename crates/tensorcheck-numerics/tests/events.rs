@@ -448,6 +448,33 @@ fn non_finite_f_at_the_step_end_is_a_failure_for_rosenbrock() {
 }
 
 #[test]
+fn overflow_inside_the_interpolant_is_a_failure() {
+    // PR #41 third review (Codex): the RK4 stages (1, 0, 0, 0) and f(t1, y1) = 1.5e308
+    // are finite, but the Hermite slope term overflows at θ = 0.5.
+    let f = |t: Quantity<Time>, y: &Quantity<Length>| {
+        let (t, y) = (t.value_in(s), y.value_in(m));
+        let v = if t == 0.0 {
+            1.0
+        } else if t == 10.0 && y != 0.0 {
+            1.5e308
+        } else {
+            0.0
+        };
+        v * (m / s)
+    };
+    let event = Event::new(|t: Quantity<Time>, _y: &Quantity<Length>| t - 5.0 * s).terminal();
+    let r = solve_ivp_events(
+        f,
+        (0.0 * s)..(10.0 * s),
+        0.0 * m,
+        Rk4 { h: 10.0 },
+        ramp_tol(),
+        event,
+    );
+    assert!(matches!(r, Err(SolveError::NonFinite { .. })), "{r:?}");
+}
+
+#[test]
 fn rejected_input_calls_neither_f_nor_g() {
     let (f_calls, g_calls) = (Cell::new(0), Cell::new(0));
     let f = |t: Quantity<Time>, y: &Quantity<Length>| {

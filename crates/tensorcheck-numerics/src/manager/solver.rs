@@ -271,9 +271,15 @@ fn watch<W: Watch + ?Sized, G: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
     };
     let mut y = vec![0.0; y1.len()];
     let mut bad = None;
+    // Every interpolated state is checked before g sees it or it is returned: finite
+    // inputs can still overflow in the interpolant (PR #41).
     let mut g = |theta: f64| {
         interpolate(theta, &mut y);
-        let v = events.value(t0 + theta * h, &y);
+        let v = if finite(&y) {
+            events.value(t0 + theta * h, &y)
+        } else {
+            f64::NAN
+        };
         if !v.is_finite() && bad.is_none() {
             bad = Some(t0 + theta * h);
         }
@@ -285,6 +291,9 @@ fn watch<W: Watch + ?Sized, G: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
     }
     let t = if theta == 1.0 { t1 } else { t0 + theta * h };
     interpolate(theta, &mut y);
+    if !finite(&y) {
+        return Err(t);
+    }
     events.record(t, &y);
     Ok(events.terminal().then_some((t, y)))
 }
