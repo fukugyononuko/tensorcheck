@@ -475,6 +475,27 @@ fn overflow_inside_the_interpolant_is_a_failure() {
 }
 
 #[test]
+fn a_steep_g_is_still_located() {
+    // PR #41 fourth review (Codex): y = t, g = y¹⁰⁰ − 0.5¹⁰⁰ (in m), one RK4 step.
+    let c = 0.5f64.powi(100);
+    let g = move |_t: Quantity<Time>, y: &Quantity<Length>| (y.value_in(m).powi(100) - c) * m;
+    let sol = solve_ivp_events(
+        ramp,
+        (0.0 * s)..(1.0 * s),
+        0.0 * m,
+        Rk4 { h: 1.0 },
+        ramp_tol(),
+        Event::new(g).terminal(),
+    )
+    .unwrap();
+    assert!(
+        (sol.t.value_in(s) - 0.5).abs() < 1e-12,
+        "t = {}",
+        sol.t.value_in(s)
+    );
+}
+
+#[test]
 fn rejected_input_calls_neither_f_nor_g() {
     let (f_calls, g_calls) = (Cell::new(0), Cell::new(0));
     let f = |t: Quantity<Time>, y: &Quantity<Length>| {

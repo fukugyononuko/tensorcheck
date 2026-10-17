@@ -100,19 +100,23 @@ pub fn dopri5_dense(theta: f64, h: f64, y0: &[f64], y1: &[f64], k: &[Vec<f64>], 
 }
 
 /// A root of `g` on `[0, 1]` by the Illinois method (DD-12, FR-31), given
-/// `g0 = g(0) ≠ 0` and `g1 = g(1)` of the other sign or zero. Stops when the bracket
-/// is at most `4ε` wide or after 100 evaluations, and returns the end on the side of
-/// `g1`, so the root found is never before the sign change.
+/// `g0 = g(0) ≠ 0` and `g1 = g(1)` of the other sign or zero. Returns the end of a
+/// bracket at most `4ε` wide on the side of `g1` (or a zero of `g`), so the root
+/// found is never before the sign change. When two steps in a row do not halve the
+/// bracket, the next step bisects: the bracket halves at least every three steps, so
+/// it always closes within the 200 evaluations allowed (PR #41).
 pub fn illinois<G: FnMut(f64) -> f64 + ?Sized>(g: &mut G, g0: f64, g1: f64) -> f64 {
     let (mut a, mut ga, mut b, mut gb) = (0.0, g0, 1.0, g1);
     // Which end was kept last: halve the other end's value when the same end stays twice.
     let mut kept = 0;
-    for _ in 0..100 {
+    // The bracket width at the last halving, and the steps since then.
+    let (mut halved_at, mut stalled) = (1.0, 0);
+    for _ in 0..200 {
         if gb == 0.0 || b - a <= 4.0 * f64::EPSILON {
             break;
         }
         let mut c = (a * gb - b * ga) / (gb - ga);
-        if !(c > a && c < b) {
+        if stalled >= 2 || !(c > a && c < b) {
             c = 0.5 * (a + b);
         }
         let gc = g(c);
@@ -128,6 +132,11 @@ pub fn illinois<G: FnMut(f64) -> f64 + ?Sized>(g: &mut G, g0: f64, g1: f64) -> f
                 gb *= 0.5;
             }
             kept = 1;
+        }
+        if b - a <= 0.5 * halved_at {
+            (halved_at, stalled) = (b - a, 0);
+        } else {
+            stalled += 1;
         }
     }
     b
@@ -316,6 +325,12 @@ mod tests {
         let root = illinois(&mut g, -0.5, 0.5);
         assert!(root >= 0.25 && root - 0.25 <= 4.0 * f64::EPSILON, "{root}");
         assert!(calls < 20, "{calls} evaluations");
+        // PR #41 fourth review (Codex): g(1)/|g(0)| ≈ 1e30 stalls the Illinois weights;
+        // the bracket must still close on the root.
+        let c = 0.5f64.powi(100);
+        let mut g = |x: f64| x.powi(100) - c;
+        let root = illinois(&mut g, -c, 1.0 - c);
+        assert!(root >= 0.5 && root - 0.5 <= 4.0 * f64::EPSILON, "{root}");
         // Falling, and a zero at the end of the step.
         let mut g = |x: f64| 0.3 - x;
         let root = illinois(&mut g, 0.3, -0.7);
