@@ -31,7 +31,7 @@
 ## 3.1 DD-01 ファイル配置と呼び出しの規則
 
 ```text
-Cargo.toml                      workspace（members: crates/*）
+Cargo.toml                      workspace（members: crates/*、exclude: ui）
 crates/
   tensorcheck/
     src/
@@ -46,7 +46,7 @@ crates/
       spaces/    euclid3.rs polar.rs minkowski.rs sphere2.rs  API-11
       labels.rs  macros.rs
       internal.rs                                tensorcheck-numerics 向け（#[doc(hidden)]）
-    tests/        ui/（コンパイル失敗のテスト）, *.rs
+    tests/        *.rs（compile_fail.rs は ui/ のケースを検査する）
     examples/
   tensorcheck-numerics/
     src/
@@ -54,6 +54,8 @@ crates/
       manager/   solver.rs                       M02
       engine/    ode_step.rs error_control.rs quadrature.rs  E05〜E07
     tests/  examples/  benches/
+ui/                             コンパイル失敗のケース（TC-F、DD-16）。ワークスペースの外
+  src/bin/   err01_….rs 〜 err22_….rs, pass_correct_expressions.rs
 scripts/  check_privacy.py check_workflows.py check_layers.py test_check_layers.py
 ```
 
