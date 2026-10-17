@@ -9,7 +9,9 @@ use tensorcheck::{Quantity, TimesDim, VectorSpace};
 use crate::engine::error_control::{
     judge, max_norm, next_step, pick_interval, rms_norm, valid_tolerance,
 };
-use crate::engine::ode_step::{RosenbrockWork, Work, dopri5_step, rk4, rodas_step};
+use crate::engine::ode_step::{
+    RosenbrockWork, Work, dopri5_dense, dopri5_step, hermite, illinois, rk4, rodas_step,
+};
 use crate::engine::quadrature::{gauss_kronrod15, gauss_legendre, romberg, simpson, trapezoid};
 use crate::ode::{Solution, SolveError, Stats};
 use crate::quad::{Integral, QuadError};
@@ -180,8 +182,124 @@ pub enum OdeKind {
     Rodas,
 }
 
+/// The event condition of a solve, on plain arrays (DD-12, FR-31). `()` means no
+/// events: `ACTIVE` is false, so the checks compile away.
+pub(crate) trait Watch {
+    const ACTIVE: bool;
+    /// `g(t, y)` in base units.
+    fn value(&mut self, t: f64, y: &[f64]) -> f64;
+    /// Whether a sign change starting from `g_before` counts (the direction).
+    fn wants(&self, g_before: f64) -> bool;
+    /// Whether the solve stops at the first event.
+    fn terminal(&self) -> bool;
+    /// Records an event.
+    fn record(&mut self, t: f64, y: &[f64]);
+}
+impl Watch for () {
+    const ACTIVE: bool = false;
+    fn value(&mut self, _: f64, _: &[f64]) -> f64 {
+        0.0
+    }
+    fn wants(&self, _: f64) -> bool {
+        false
+    }
+    fn terminal(&self) -> bool {
+        false
+    }
+    fn record(&mut self, _: f64, _: &[f64]) {}
+}
+
+/// How the state inside a step is interpolated for events (DD-12).
+enum Dense<'a> {
+    /// Cubic Hermite from `f(t0, y0)` and `f(t1, y1)`; `None` evaluates `f(t1, y1)`
+    /// only when the sign changed (RK4).
+    Hermite(&'a [f64], Option<&'a [f64]>),
+    /// The continuous extension of Dormand–Prince from the stages of the step.
+    Dopri5(&'a [Vec<f64>]),
+}
+
+/// Checks one accepted step from `(t0, y0)` to `(t1, y1)` for an event (DD-12).
+/// Updates `g_before` to `g(t1, y1)`. Returns the point where a terminal event stops
+/// the solve, or `Err(t)` when `g` was not finite at `t`.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn solve_ivp<T, Y, R, F, A, O>(
+fn watch<W: Watch + ?Sized, G: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
+    events: &mut W,
+    g_before: &mut f64,
+    rhs: &mut G,
+    t0: f64,
+    y0: &[f64],
+    t1: f64,
+    y1: &[f64],
+    dense: Dense,
+) -> Result<Option<(f64, Vec<f64>)>, f64> {
+    let (g0, g1) = (*g_before, events.value(t1, y1));
+    if !g1.is_finite() {
+        return Err(t1);
+    }
+    *g_before = g1;
+    // Compare signs, not the product: g0 g1 underflows to −0 for tiny values (PR #41).
+    let changed = (g0 < 0.0 && g1 >= 0.0) || (g0 > 0.0 && g1 <= 0.0);
+    if !changed || !events.wants(g0) {
+        return Ok(None);
+    }
+    let mut computed = Vec::new();
+    let h = t1 - t0;
+    // What the interpolant is built from must be finite, like the state (PR #41).
+    let finite = |v: &[f64]| v.iter().all(|x| x.is_finite());
+    let interpolate = match dense {
+        Dense::Hermite(f0, f1) => {
+            let f1 = match f1 {
+                Some(f) => f,
+                None => {
+                    computed.resize(y1.len(), 0.0);
+                    rhs(t1, y1, &mut computed);
+                    &computed
+                }
+            };
+            if !finite(f1) {
+                return Err(t1);
+            }
+            Box::new(move |theta: f64, out: &mut [f64]| hermite(theta, h, y0, f0, y1, f1, out))
+                as Box<dyn Fn(f64, &mut [f64]) + '_>
+        }
+        Dense::Dopri5(k) => {
+            if !k.iter().all(|ki| finite(ki)) {
+                return Err(t1);
+            }
+            Box::new(move |theta: f64, out: &mut [f64]| dopri5_dense(theta, h, y0, y1, k, out))
+        }
+    };
+    let mut y = vec![0.0; y1.len()];
+    let mut bad = None;
+    // Every interpolated state is checked before g sees it or it is returned: finite
+    // inputs can still overflow in the interpolant (PR #41).
+    let mut g = |theta: f64| {
+        interpolate(theta, &mut y);
+        let v = if finite(&y) {
+            events.value(t0 + theta * h, &y)
+        } else {
+            f64::NAN
+        };
+        if !v.is_finite() && bad.is_none() {
+            bad = Some(t0 + theta * h);
+        }
+        v
+    };
+    let theta = illinois(&mut g, g0, g1);
+    if let Some(t) = bad {
+        return Err(t);
+    }
+    let t = if theta == 1.0 { t1 } else { t0 + theta * h };
+    interpolate(theta, &mut y);
+    if !finite(&y) {
+        return Err(t);
+    }
+    events.record(t, &y);
+    Ok(events.terminal().then_some((t, y)))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn solve_ivp<T, Y, R, F, A, O, W>(
     mut f: F,
     span: Range<Quantity<T>>,
     y0: Y,
@@ -190,6 +308,7 @@ pub(crate) fn solve_ivp<T, Y, R, F, A, O>(
     rtol: f64,
     atol: &A,
     on_step: &mut O,
+    events: &mut W,
 ) -> Result<Solution<T, Y>, SolveError<T>>
 where
     F: FnMut(Quantity<T>, &Y) -> R,
@@ -197,6 +316,7 @@ where
     R: VectorSpace,
     A: VectorSpace,
     O: FnMut(Quantity<T>, &Y) + ?Sized,
+    W: Watch + ?Sized,
 {
     let n = Y::LEN;
     let (t0, t1) = (span.start.base_value(), span.end.base_value());
@@ -225,6 +345,14 @@ where
         // initial step size.
         return Err(SolveError::MaxSteps { t: span.start });
     }
+    let mut g_before = 0.0;
+    if W::ACTIVE && dir * (t1 - t0) > 0.0 {
+        let y: Vec<f64> = (0..n).map(|i| y0.component(i)).collect();
+        g_before = events.value(t0, &y);
+        if !g_before.is_finite() {
+            return Err(SolveError::NonFinite { t: span.start });
+        }
+    }
     let mut stats = Stats::default();
     let evals = Cell::new(0usize);
     let mut rhs = |t: f64, y: &[f64], out: &mut [f64]| {
@@ -242,6 +370,26 @@ where
     let mut y_new = vec![0.0; n];
     let mut t = t0;
     let finite = |v: &[f64]| v.iter().all(|x| x.is_finite());
+    // The end of the solve at a terminal event: on_step sees the event point last.
+    macro_rules! stop_at {
+        ($watched:expr) => {
+            match $watched {
+                Err(tb) => return Err(SolveError::NonFinite { t: at(tb) }),
+                Ok(Some((te, ye))) => {
+                    stats.steps += 1;
+                    let ye = Y::from_components(|i| ye[i]);
+                    on_step(at(te), &ye);
+                    stats.evaluations = evals.get();
+                    return Ok(Solution {
+                        t: at(te),
+                        y: ye,
+                        stats,
+                    });
+                }
+                Ok(None) => {}
+            }
+        };
+    }
     match kind {
         OdeKind::Rk4(h_abs) => {
             let mut w = Work::new(4, n);
@@ -253,6 +401,19 @@ where
                 rk4(&mut rhs, t, &y, h, &mut w, &mut y_new);
                 if !finite(&y_new) {
                     return Err(SolveError::NonFinite { t: at(t) });
+                }
+                if W::ACTIVE {
+                    let w0 = &w.k[0];
+                    stop_at!(watch(
+                        events,
+                        &mut g_before,
+                        &mut rhs,
+                        t,
+                        &y,
+                        t + h,
+                        &y_new,
+                        Dense::Hermite(w0, None)
+                    ));
                 }
                 t += h;
                 core::mem::swap(&mut y, &mut y_new);
@@ -289,6 +450,19 @@ where
                 }
                 let e = rms_norm(&err, &y, &y_new, &atol, rtol);
                 if judge(e) {
+                    if W::ACTIVE {
+                        let k = &w.k;
+                        stop_at!(watch(
+                            events,
+                            &mut g_before,
+                            &mut rhs,
+                            t,
+                            &y,
+                            t + h,
+                            &y_new,
+                            Dense::Dopri5(k)
+                        ));
+                    }
                     t += h;
                     core::mem::swap(&mut y, &mut y_new);
                     let (k0, k6) = (0, 6);
@@ -310,6 +484,7 @@ where
             let mut err = vec![0.0; n];
             let mut f0 = vec![0.0; n];
             let mut ft = vec![0.0; n];
+            let mut f1 = vec![0.0; n];
             let scale: Vec<f64> = atol.iter().map(|a| a.max(f64::MIN_POSITIVE)).collect();
             let t_scale = (t1 - t0).abs().max(f64::MIN_POSITIVE);
             rhs(t, &y, &mut f0);
@@ -359,9 +534,23 @@ where
                 }
                 let e = rms_norm(&err, &y, &y_new, &atol, rtol);
                 if judge(e) {
+                    // f at the new point: for the next step, and for the event check.
+                    rhs(t + h, &y_new, &mut f1);
+                    if W::ACTIVE {
+                        stop_at!(watch(
+                            events,
+                            &mut g_before,
+                            &mut rhs,
+                            t,
+                            &y,
+                            t + h,
+                            &y_new,
+                            Dense::Hermite(&f0, Some(&f1))
+                        ));
+                    }
                     t += h;
                     core::mem::swap(&mut y, &mut y_new);
-                    rhs(t, &y, &mut f0);
+                    core::mem::swap(&mut f0, &mut f1);
                     stats.steps += 1;
                     on_step(at(t), &Y::from_components(|i| y[i]));
                     h = next_step(h, e, 3, rejected_last);
