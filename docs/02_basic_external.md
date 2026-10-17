@@ -238,7 +238,7 @@ impl Metric for SphereMetric {
 | ERR-13 | 対称性の違うテンソルの足し算 | `cannot add tensors with different symmetry` | `symmetrize or antisymmetrize one of them first` | E04 |
 | ERR-14 | 右辺の型が「状態 ÷ 時間」でない | `the right-hand side must return the state type divided by the time dimension` | `for dy/dt = f(t, y), f must return a value whose dimension is [y]/[t]` | M02 |
 | ERR-15 | 許容値の絶対誤差の型が状態と違う | `the absolute tolerance must have the same type as the state` | — | M02 |
-| ERR-16 | テンソルでないもの（Christoffel 記号など）の座標変換 | `` `{T}` is not a tensor and cannot be transformed to another chart `` | `Christoffel symbols and partial derivatives depend on the chart; compute them in the target chart instead` | E02 |
+| ERR-16 | テンソルでないもの（Christoffel 記号など）の座標変換 | `this is not a tensor and cannot be transformed to another chart` | `Christoffel symbols and partial derivatives depend on the chart; compute them in the target chart instead` | E02 |
 | ERR-17 | テンソルとテンソルでないものの足し算 | `cannot add a tensor and a chart-bound (non-tensor) quantity` | `use geometry::covariant_derivative to combine partial derivatives and Christoffel symbols` | E02 |
 | ERR-18 | 計量テンソル・テンソル場の成分が、数値の型によらない形で書かれていない | （差し替えられない。コンパイラ自身のエラー E0049「型引数の数が trait の宣言と合わない」が出る） | API ドキュメントと EXT-06・EXT-08 の説明に、数値の型によらない形で書く理由と書き方を載せる | コンパイラ |
 | ERR-19 | 座標基底でない座標系で、接続・曲率・共変微分を求める | `` `{C}` is not a coordinate basis; Christoffel symbols and curvature need a coordinate basis `` | `connection coefficients in non-coordinate bases (e.g. orthonormal frames) are not supported yet` | M03 |
@@ -247,6 +247,8 @@ impl Metric for SphereMetric {
 | ERR-22 | 指数に奇数のある次元の平方根（例：長さの平方根） | `cannot take the square root: the dimension has an odd exponent` | `every base-dimension exponent must be even, e.g. m^2 or m^2/s^2` | E01 |
 
 - 見出しの文言は実装時に、04 のコンパイル失敗のテスト（TC-F）で実際の出力を確かめて調整する。調整したらこの表も直す。
+- ERR-16 の見出しには、変換しようとした型の名前を入れない（issue #36）。判定する trait はテンソル性の印（`Tensorial`・`ChartBound`）に対して働くので、型の名前を入れるにはテンソルの型を渡す必要がある。試したところ、見出しが `` `Tensor<Dim<Si, Cons<Pos<S<Z>>, …>` is not a tensor … `` のように内部の型の表現になり、読めなかった（NFR-05）。どこが誤りかは、見出しの下の位置の表示（`transform` の呼び出し）でわかる。
+- 表の `{…}` は差し込まれる名前の説明で、コードでの書き方（`{Self}` など）とは違うことがある。出力される文は同じ（issue #36 で ERR-01〜ERR-22 のすべてをコードと照らした）。
 - 判定する構成要素が M02 の誤り（ERR-14、ERR-15）は、M02 の公開する関数の型の制約として表す。
 - ERR-18 は、trait のメソッドの形の誤りなので、コンパイラ自身のエラーになり、見出しを差し替えられない。NFR-05 の例外として扱い、ドキュメントで補う。
 
