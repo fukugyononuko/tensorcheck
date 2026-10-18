@@ -9,6 +9,7 @@
   PRIVACY_DENYLIST で与えれば照合すること
 - core.worktree で、元の作業ツリーが .git の親の外側にある構成でも、その親の禁止語を使わないこと
 - 空白だけの .privacy-denylist や PRIVACY_DENYLIST は、次の候補（元の作業ツリー）の禁止語を隠さないこと
+- 優先順位の低い出どころは、上に有効な語があれば読まないこと
 - 禁止語がどこにもないとき、手元では失敗し、CI（CI=true）では警告して成功すること
 - 禁止語があり、文章に含まれないときは成功し、照合した語数を表示すること
 """
@@ -113,6 +114,9 @@ def main() -> int:
         main_tree, worktree = make_repo(Path(tmp) / "clean", "nothing here\n")
         (main_tree / ".privacy-denylist").write_text(f"{WORD}\nanother\n", encoding="utf-8")
         expect("禁止語を含まなければ成功する（worktree）", run(worktree), True, "禁止語 2 語")
+        # 優先順位の低い出どころは、上に有効な語があれば読まない（読めないものが置いてあっても止まらない）
+        (worktree / ".privacy-denylist").mkdir()
+        expect("PRIVACY_DENYLIST があれば、読めない .privacy-denylist を読まない", run(worktree, denylist="unrelatedword"), True, "禁止語 1 語")
 
         main_tree, worktree = make_repo(Path(tmp) / "none", "nothing here\n")
         expect("禁止語がなければ手元では失敗する（元の作業ツリー）", run(main_tree), False)
@@ -122,7 +126,7 @@ def main() -> int:
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
-    print("test_check_privacy: 16 の場合がすべて期待どおりでした")
+    print("test_check_privacy: 17 の場合がすべて期待どおりでした")
     return 0
 
 

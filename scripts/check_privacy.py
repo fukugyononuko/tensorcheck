@@ -44,12 +44,19 @@ def main_worktree() -> Path | None:
     return common.parent if top.returncode == 0 and Path(top.stdout.strip()).resolve() == common.parent else None
 
 
+def denylist_sources():
+    """禁止語の出どころを優先順に 1 つずつ返す。後の出どころは、前に有効な語がなかったときだけ読む。"""
+    yield os.environ.get("PRIVACY_DENYLIST", "")
+    yield Path(".privacy-denylist").read_text(encoding="utf-8") if Path(".privacy-denylist").exists() else ""
+    # git worktree の作業ツリーには管理外のファイルがないので、元の作業ツリーでも探す
+    main_tree = main_worktree()
+    if main_tree and (main_tree / ".privacy-denylist").exists():
+        yield (main_tree / ".privacy-denylist").read_text(encoding="utf-8")
+
+
 def read_denylist() -> list[str]:
     """禁止語の一覧。有効な語が 1 つもない出どころ（空白だけのファイルなど）は飛ばし、次の候補を見る。"""
-    main_tree = main_worktree()
-    paths = [Path(".privacy-denylist")] + ([main_tree / ".privacy-denylist"] if main_tree else [])
-    # git worktree の作業ツリーには管理外のファイルがないので、元の作業ツリーでも探す
-    for raw in [os.environ.get("PRIVACY_DENYLIST", "")] + [p.read_text(encoding="utf-8") for p in paths if p.exists()]:
+    for raw in denylist_sources():
         if words := [w.strip().lower() for w in raw.splitlines() if w.strip()]:
             return words
     return []
