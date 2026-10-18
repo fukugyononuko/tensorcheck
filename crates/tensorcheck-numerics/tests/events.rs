@@ -498,9 +498,10 @@ fn a_steep_g_is_still_located() {
 #[test]
 fn a_discontinuous_g_gives_the_point_where_the_sign_jumps() {
     // Issue #42 (PR #41 sixth review, Codex): g has no zero, only a jump of sign. If g
-    // is finite wherever it is evaluated, the event is the end of the closed bracket on
-    // the side of the sign after the change. If the search evaluates g exactly at a
-    // pole, the solve fails with NonFinite at that time (PR #47 review, Codex).
+    // is finite wherever it is evaluated, the event is either a point where g was
+    // evaluated exactly 0, or the end of the closed bracket on the side of the sign
+    // after the change, next to the jump. If the search evaluates g exactly at a pole,
+    // the solve fails with NonFinite at that time (PR #47 reviews, Codex).
     // Returns whether the solve succeeded.
     fn check(name: &str, g: fn(f64) -> f64, jump: f64) -> bool {
         let r = solve_ivp_events(
@@ -523,6 +524,9 @@ fn a_discontinuous_g_gives_the_point_where_the_sign_jumps() {
         };
         assert_eq!(sol.events.len(), 1, "{name}");
         let b = sol.t.value_in(s);
+        if g(b) == 0.0 {
+            return true;
+        }
         let after = g(1.0).signum();
         assert_eq!(g(b).signum(), after, "{name}: g({b}) = {}", g(b));
         assert_eq!(
@@ -542,6 +546,12 @@ fn a_discontinuous_g_gives_the_point_where_the_sign_jumps() {
         "falling step at 0.3",
         |t| if t < 0.3 { 2.0 } else { -3.0 },
         0.3,
+    ));
+    // Continuous, but g(1) = 0 ends the search at once (PR #47 second review, Codex).
+    assert!(check(
+        "zero plateau from 0.2",
+        |t| if t < 0.2 { t - 0.2 } else { 0.0 },
+        0.2
     ));
     // The search does not land on the pole at 0.7, but lands exactly on the one at
     // 0.5 (g = 2 and −2 at the ends, so the first secant point is 0.5).
