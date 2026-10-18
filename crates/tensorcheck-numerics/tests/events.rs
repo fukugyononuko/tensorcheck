@@ -547,6 +547,21 @@ fn a_discontinuous_g_gives_the_point_where_the_sign_jumps() {
         |t| if t < 0.3 { 2.0 } else { -3.0 },
         0.3,
     ));
+    // An exact zero at 0.5 is the first secant point, so it is returned although the
+    // sign jumps at 0.75 (PR #47 third review, Codex).
+    assert!(check(
+        "isolated zero before a jump",
+        |t| {
+            if t == 0.5 {
+                0.0
+            } else if t < 0.75 {
+                -1.0
+            } else {
+                1.0
+            }
+        },
+        0.75
+    ));
     // Continuous, but g(1) = 0 ends the search at once (PR #47 second review, Codex).
     assert!(check(
         "zero plateau from 0.2",
