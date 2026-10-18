@@ -340,6 +340,15 @@ where
 /// quantity of any dimension. By default, every sign change is recorded and the
 /// solve goes on.
 ///
+/// `g` must be continuous along the interpolated solution. Only the sign of `g` is
+/// examined, so for a discontinuous `g` an event may be reported where `g` is not
+/// zero. In every case the event point is either a point where `g` was evaluated
+/// as exactly zero, or the end on the side of the step end (after the sign change
+/// in the direction of integration, so the earlier time when solving backward) of
+/// an interval at most 4ε times the step wide across which the sign of `g` changes
+/// (for a jump of sign, the interval holds the jump). If `g` is evaluated as NaN or infinity, for example exactly at a pole,
+/// the solve fails with [`SolveError::NonFinite`].
+///
 /// ```
 /// use tensorcheck::Quantity;
 /// use tensorcheck::units::si::{Dimensionless, Frequency, Time, one, s};
@@ -489,7 +498,8 @@ where
 /// FR-31). The sign of `g` is checked at the end of every accepted step; in a step
 /// where it changes, the time is found on the interpolant of the step (no
 /// re-solving; see [`Crossing::y`]). Two sign changes within one step are missed, and a zero exactly
-/// at the start is not an event. `g` returning NaN or infinity gives
+/// at the start is not an event. `g` is assumed continuous; see [`Event`] for what
+/// the event point guarantees otherwise. `g` returning NaN or infinity gives
 /// [`SolveError::NonFinite`]. Rejected input calls neither `f` nor `g`.
 pub fn solve_ivp_events<T, Y, R, F, A, M, G, D>(
     f: F,

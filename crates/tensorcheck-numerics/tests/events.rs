@@ -496,6 +496,110 @@ fn a_steep_g_is_still_located() {
 }
 
 #[test]
+fn a_discontinuous_g_gives_the_point_where_the_sign_jumps() {
+    // Issue #42 (PR #41 sixth review, Codex): g has no zero, only a jump of sign. If g
+    // is finite wherever it is evaluated, the event is either a point where g was
+    // evaluated exactly 0, or the end of the closed bracket on the side of the sign
+    // after the change, next to the jump. If the search evaluates g exactly at a pole,
+    // the solve fails with NonFinite at that time (PR #47 reviews, Codex).
+    // Returns whether the solve succeeded.
+    fn check(name: &str, g: fn(f64) -> f64, jump: f64) -> bool {
+        let r = solve_ivp_events(
+            ramp,
+            (0.0 * s)..(1.0 * s),
+            0.0 * m,
+            Rk4 { h: 1.0 },
+            ramp_tol(),
+            Event::new(move |t: Quantity<Time>, _y: &Quantity<Length>| g(t.value_in(s)) * m)
+                .terminal(),
+        );
+        let sol = match r {
+            Ok(sol) => sol,
+            Err(SolveError::NonFinite { t }) => {
+                let t = t.value_in(s);
+                assert!(!g(t).is_finite(), "{name}: NonFinite at {t}, g = {}", g(t));
+                return false;
+            }
+            Err(e) => panic!("{name}: {e}"),
+        };
+        assert_eq!(sol.events.len(), 1, "{name}");
+        let b = sol.t.value_in(s);
+        if g(b) == 0.0 {
+            return true;
+        }
+        let after = g(1.0).signum();
+        assert_eq!(g(b).signum(), after, "{name}: g({b}) = {}", g(b));
+        assert_eq!(
+            g(b - 4.0 * f64::EPSILON).signum(),
+            -after,
+            "{name}: bracket not closed at {b}"
+        );
+        assert!((b - jump).abs() <= 4.0 * f64::EPSILON, "{name}: t = {b}");
+        true
+    }
+    assert!(check(
+        "step at 0.5",
+        |t| if t < 0.5 { -1.0 } else { 1.0 },
+        0.5
+    ));
+    assert!(check(
+        "falling step at 0.3",
+        |t| if t < 0.3 { 2.0 } else { -3.0 },
+        0.3,
+    ));
+    // An exact zero at 0.5 is the first secant point, so it is returned although the
+    // sign jumps at 0.75 (PR #47 third review, Codex).
+    assert!(check(
+        "isolated zero before a jump",
+        |t| {
+            if t == 0.5 {
+                0.0
+            } else if t < 0.75 {
+                -1.0
+            } else {
+                1.0
+            }
+        },
+        0.75
+    ));
+    // Continuous, but g(1) = 0 ends the search at once (PR #47 second review, Codex).
+    assert!(check(
+        "zero plateau from 0.2",
+        |t| if t < 0.2 { t - 0.2 } else { 0.0 },
+        0.2
+    ));
+    // The search does not land on the pole at 0.7, but lands exactly on the one at
+    // 0.5 (g = 2 and −2 at the ends, so the first secant point is 0.5).
+    assert!(check("pole at 0.7", |t| 1.0 / (0.7 - t), 0.7));
+    assert!(!check("pole at 0.5", |t| 1.0 / (0.5 - t), 0.5));
+
+    // Backward in time, the bracket end is on the side of the step end, which is the
+    // earlier time (PR #47 fifth review, Codex).
+    let g = |t: f64| if t < 0.5 { -1.0 } else { 1.0 };
+    let sol = solve_ivp_events(
+        ramp,
+        (1.0 * s)..(0.0 * s),
+        1.0 * m,
+        Rk4 { h: 1.0 },
+        ramp_tol(),
+        Event::new(move |t: Quantity<Time>, _y: &Quantity<Length>| g(t.value_in(s)) * m).terminal(),
+    )
+    .unwrap();
+    let b = sol.t.value_in(s);
+    assert_eq!(
+        g(b),
+        g(0.0),
+        "backward: g({b}) is not on the side of the step end"
+    );
+    assert_eq!(
+        g(b + 4.0 * f64::EPSILON),
+        -g(0.0),
+        "backward: bracket not closed at {b}"
+    );
+    assert!((b - 0.5).abs() <= 4.0 * f64::EPSILON, "backward: t = {b}");
+}
+
+#[test]
 fn a_tiny_g_beyond_the_root_does_not_end_the_search() {
     // PR #41 fifth review (Codex): g(1) = 5e-324; halving that weight gives 0, which
     // was taken for a root at t = 1. The only root is t = 0.9.
