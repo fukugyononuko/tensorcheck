@@ -5,6 +5,7 @@
 
 - 元の作業ツリーにある .privacy-denylist の語を、元の作業ツリーでも worktree（その下の階層）でも見つけること。
   .git を作業ツリーの外に置いた構成（--separate-git-dir）では、core.worktree（絶対パスか、共通の .git を基準にした相対パス）があれば同じ。なければ（共通の .git の親に関係のない .privacy-denylist があっても）手元では成功しないこと
+- extensions.worktreeConfig で core.worktree が共通の .git の config.worktree にあっても同じ
 - bare リポジトリの worktree では、bare リポジトリの親の .privacy-denylist を使わないこと
 - 禁止語がどこにもないとき、手元では失敗し、CI（CI=true）では警告して成功すること
 - 禁止語があり、文章に含まれないときは成功し、照合した語数を表示すること
@@ -79,6 +80,14 @@ def main() -> int:
             expect(f".git が外でも、core.worktree（{kind}）があれば worktree で見つける", run(worktree), False, "禁止語（1 行目の語）")
             expect(f".git が外でも、core.worktree（{kind}）があれば CI で検査を飛ばさない", run(worktree, ci=True), False, "禁止語（1 行目の語）")
 
+        # extensions.worktreeConfig では、元の作業ツリーの core.worktree は共通の .git の config.worktree に入る
+        main_tree, worktree = make_repo(Path(tmp) / "wtconfig", f"contains {WORD}\n", separate=True)
+        (main_tree / ".privacy-denylist").write_text(f"{WORD}\n", encoding="utf-8")
+        subprocess.run(["git", "config", "extensions.worktreeConfig", "true"], cwd=main_tree, check=True)
+        subprocess.run(["git", "config", "--worktree", "core.worktree", str(main_tree)], cwd=main_tree, check=True)
+        expect("core.worktree が config.worktree にあっても、worktree で見つける", run(worktree), False, "禁止語（1 行目の語）")
+        expect("core.worktree が config.worktree にあっても、CI で検査を飛ばさない", run(worktree, ci=True), False, "禁止語（1 行目の語）")
+
         # bare リポジトリ（meta/.git）の worktree。meta は作業ツリーではないので、そこの関係のない禁止語を使わないこと
         source, _ = make_repo(Path(tmp) / "bare" / "source", f"contains {WORD}\n")
         bare = Path(tmp) / "bare" / "meta" / ".git"
@@ -100,7 +109,7 @@ def main() -> int:
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
-    print("test_check_privacy: 14 の場合がすべて期待どおりでした")
+    print("test_check_privacy: 16 の場合がすべて期待どおりでした")
     return 0
 
 

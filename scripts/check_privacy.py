@@ -35,8 +35,15 @@ def main_worktree() -> Path | None:
     bare リポジトリのように、その場所を git が作業ツリーとして扱わないときも None を返す。
     そこにある関係のない .privacy-denylist を使わず、手元では失敗させるため。
     """
-    configured = subprocess.run(["git", "config", "--get", "core.worktree"], capture_output=True, text=True).stdout.strip()
     common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()).resolve()
+    # 元の作業ツリーの設定は、元の作業ツリーの設定ファイルから読む（今の worktree の設定を経由しない）。
+    # extensions.worktreeConfig では config.worktree に、そうでなければ共通の config に入る
+    configured = ""
+    for name in ("config.worktree", "config"):
+        if (common / name).exists():
+            found = subprocess.run(["git", "config", "--file", str(common / name), "--get", "core.worktree"], capture_output=True, text=True)
+            if configured := found.stdout.strip():
+                break
     if configured:
         # 絶対パスなら、つないでもそのまま
         candidate = (common / configured).resolve()
