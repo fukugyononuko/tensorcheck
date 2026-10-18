@@ -7,6 +7,8 @@
 - 通常でない構成（.git を作業ツリーの外に置く --separate-git-dir、bare リポジトリ）では元の作業ツリーを探さず、
   共通の .git の親に関係のない .privacy-denylist があっても（その親が別のリポジトリの作業ツリーでも）、core.worktree があっても、手元では成功しないこと。
   PRIVACY_DENYLIST で与えれば照合すること
+- core.worktree で、元の作業ツリーが .git の親の外側にある構成でも、その親の禁止語を使わないこと
+- 空白だけの .privacy-denylist や PRIVACY_DENYLIST は、次の候補（元の作業ツリー）の禁止語を隠さないこと
 - 禁止語がどこにもないとき、手元では失敗し、CI（CI=true）では警告して成功すること
 - 禁止語があり、文章に含まれないときは成功し、照合した語数を表示すること
 """
@@ -93,6 +95,21 @@ def main() -> int:
         (bare.parent / ".privacy-denylist").write_text("unrelatedword\n", encoding="utf-8")
         expect("bare リポジトリの親の禁止語を使わない", run(bare_tree), False, "禁止語が見つかりません")
 
+        # core.worktree で、通常の名前の .git を持つ main の外側（container）を作業ツリーにした構成。
+        # main は作業ツリーの内側にあるだけで、直下ではない。main の関係のない禁止語を使わないこと
+        main_tree, worktree = make_repo(Path(tmp) / "container" / "inner", f"contains {WORD}\n")
+        subprocess.run(["git", "config", "core.worktree", str(main_tree.parent)], cwd=main_tree, check=True)
+        (main_tree.parent / ".privacy-denylist").write_text(f"{WORD}\n", encoding="utf-8")
+        (main_tree / ".privacy-denylist").write_text("unrelatedword\n", encoding="utf-8")
+        expect("core.worktree の内側にある .git の親の禁止語を使わない", run(worktree), False, "禁止語が見つかりません")
+
+        # 空白だけの .privacy-denylist や PRIVACY_DENYLIST は、元の作業ツリーの禁止語を隠さないこと
+        main_tree, worktree = make_repo(Path(tmp) / "blank", f"contains {WORD}\n")
+        (main_tree / ".privacy-denylist").write_text(f"{WORD}\n", encoding="utf-8")
+        (worktree / ".privacy-denylist").write_text("  \n\n", encoding="utf-8")
+        expect("空白だけの worktree のファイルがあっても、元の作業ツリーの禁止語を使う（CI）", run(worktree, ci=True), False, "禁止語（1 行目の語）")
+        expect("空白だけの PRIVACY_DENYLIST があっても、元の作業ツリーの禁止語を使う", run(worktree, denylist=" \n"), False, "禁止語（1 行目の語）")
+
         main_tree, worktree = make_repo(Path(tmp) / "clean", "nothing here\n")
         (main_tree / ".privacy-denylist").write_text(f"{WORD}\nanother\n", encoding="utf-8")
         expect("禁止語を含まなければ成功する（worktree）", run(worktree), True, "禁止語 2 語")
@@ -105,7 +122,7 @@ def main() -> int:
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
-    print("test_check_privacy: 13 の場合がすべて期待どおりでした")
+    print("test_check_privacy: 16 の場合がすべて期待どおりでした")
     return 0
 
 

@@ -37,20 +37,22 @@ def main_worktree() -> Path | None:
     common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()).resolve()
     if (common.parent / ".git").resolve() != common:
         return None
-    # bare リポジトリ meta/.git の親 meta は作業ツリーでない
-    inside = subprocess.run(["git", "-C", str(common.parent), "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True)
-    return common.parent if inside.stdout.strip() == "true" else None
+    # その親が、作業ツリーの直下そのものであること（親で動く git は、上で確かめた共通の .git を使う）。
+    # bare リポジトリ meta/.git の親 meta は作業ツリーでなく、core.worktree で外側を作業ツリーにした構成では、
+    # 親は作業ツリーの内側にあるだけ
+    top = subprocess.run(["git", "-C", str(common.parent), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    return common.parent if top.returncode == 0 and Path(top.stdout.strip()).resolve() == common.parent else None
 
 
-def read_denylist() -> str:
-    if os.environ.get("PRIVACY_DENYLIST"):
-        return os.environ["PRIVACY_DENYLIST"]
-    # git worktree の作業ツリーには管理外のファイルがないので、元の作業ツリーでも探す
+def read_denylist() -> list[str]:
+    """禁止語の一覧。有効な語が 1 つもない出どころ（空白だけのファイルなど）は飛ばし、次の候補を見る。"""
     main_tree = main_worktree()
-    for path in [Path(".privacy-denylist")] + ([main_tree / ".privacy-denylist"] if main_tree else []):
-        if path.exists():
-            return path.read_text(encoding="utf-8")
-    return ""
+    paths = [Path(".privacy-denylist")] + ([main_tree / ".privacy-denylist"] if main_tree else [])
+    # git worktree の作業ツリーには管理外のファイルがないので、元の作業ツリーでも探す
+    for raw in [os.environ.get("PRIVACY_DENYLIST", "")] + [p.read_text(encoding="utf-8") for p in paths if p.exists()]:
+        if words := [w.strip().lower() for w in raw.splitlines() if w.strip()]:
+            return words
+    return []
 
 
 def main() -> int:
@@ -62,7 +64,7 @@ def main() -> int:
     identities = {e for e in git("log", "--format=%ae%n%ce").splitlines() if e}
     problems += [f"許可していないアドレスのコミットがあります：{e}" for e in sorted(identities - ALLOWED_EMAILS)]
 
-    denylist = [w.strip().lower() for w in read_denylist().splitlines() if w.strip()]
+    denylist = read_denylist()
     if not denylist and os.environ.get("CI") != "true":
         problems.append(
             f"禁止語が見つかりません。PRIVACY_DENYLIST か .privacy-denylist（作業ツリーの直下か、git worktree の元の作業ツリーの直下）で与えてください"
