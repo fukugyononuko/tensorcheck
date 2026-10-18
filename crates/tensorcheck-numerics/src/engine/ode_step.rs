@@ -102,7 +102,8 @@ pub fn dopri5_dense(theta: f64, h: f64, y0: &[f64], y1: &[f64], k: &[Vec<f64>], 
 /// A root of `g` on `[0, 1]` by the Illinois method (DD-12, FR-31), given
 /// `g0 = g(0) ≠ 0` and `g1 = g(1)` of the other sign or zero. Returns a point where
 /// `g` was evaluated to exactly zero, or the end of a bracket at most `4ε` wide on
-/// the side of `g1`, so the root found is never before the sign change. When two
+/// the side of `g1`. For a continuous `g`, that bracket end is never before the root
+/// it encloses; for a discontinuous one, see `Event` (issue #42). When two
 /// steps in a row do not halve the bracket, the next step bisects: the bracket
 /// halves at least every three steps, so it always closes within the 200
 /// evaluations allowed (PR #41).
