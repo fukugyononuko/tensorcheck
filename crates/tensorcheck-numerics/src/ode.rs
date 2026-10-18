@@ -343,9 +343,10 @@ where
 /// `g` must be continuous along the interpolated solution. Only the sign of `g` is
 /// examined, so for a discontinuous `g` an event may be reported where `g` is not
 /// zero. In every case the event point is either a point where `g` was evaluated
-/// as exactly zero, or the later end of an interval at most 4ε times the step wide
-/// across which the sign of `g` changes (for a jump of sign, the interval holds the
-/// jump). If `g` is evaluated as NaN or infinity, for example exactly at a pole,
+/// as exactly zero, or the end on the side of the step end (after the sign change
+/// in the direction of integration, so the earlier time when solving backward) of
+/// an interval at most 4ε times the step wide across which the sign of `g` changes
+/// (for a jump of sign, the interval holds the jump). If `g` is evaluated as NaN or infinity, for example exactly at a pole,
 /// the solve fails with [`SolveError::NonFinite`].
 ///
 /// ```

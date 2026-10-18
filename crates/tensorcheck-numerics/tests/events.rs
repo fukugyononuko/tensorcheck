@@ -572,6 +572,31 @@ fn a_discontinuous_g_gives_the_point_where_the_sign_jumps() {
     // 0.5 (g = 2 and −2 at the ends, so the first secant point is 0.5).
     assert!(check("pole at 0.7", |t| 1.0 / (0.7 - t), 0.7));
     assert!(!check("pole at 0.5", |t| 1.0 / (0.5 - t), 0.5));
+
+    // Backward in time, the bracket end is on the side of the step end, which is the
+    // earlier time (PR #47 fifth review, Codex).
+    let g = |t: f64| if t < 0.5 { -1.0 } else { 1.0 };
+    let sol = solve_ivp_events(
+        ramp,
+        (1.0 * s)..(0.0 * s),
+        1.0 * m,
+        Rk4 { h: 1.0 },
+        ramp_tol(),
+        Event::new(move |t: Quantity<Time>, _y: &Quantity<Length>| g(t.value_in(s)) * m).terminal(),
+    )
+    .unwrap();
+    let b = sol.t.value_in(s);
+    assert_eq!(
+        g(b),
+        g(0.0),
+        "backward: g({b}) is not on the side of the step end"
+    );
+    assert_eq!(
+        g(b + 4.0 * f64::EPSILON),
+        -g(0.0),
+        "backward: bracket not closed at {b}"
+    );
+    assert!((b - 0.5).abs() <= 4.0 * f64::EPSILON, "backward: t = {b}");
 }
 
 #[test]
