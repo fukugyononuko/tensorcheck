@@ -52,6 +52,100 @@ pub fn rk4<F: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
     }
 }
 
+/// Cubic Hermite interpolation on a step of size `h` (DD-12, FR-31): writes the state
+/// at `t + θ h` from the values `y0`, `y1` and derivatives `f0`, `f1` at both ends.
+pub fn hermite(
+    theta: f64,
+    h: f64,
+    y0: &[f64],
+    f0: &[f64],
+    y1: &[f64],
+    f1: &[f64],
+    out: &mut [f64],
+) {
+    let s = 1.0 - theta;
+    let (h00, h10) = ((1.0 + 2.0 * theta) * s * s, theta * s * s);
+    let (h01, h11) = (theta * theta * (3.0 - 2.0 * theta), -theta * theta * s);
+    for i in 0..out.len() {
+        out[i] = h00 * y0[i] + h10 * h * f0[i] + h01 * y1[i] + h11 * h * f1[i];
+    }
+}
+
+/// The continuous extension of order 4 of a Dormand–Prince step (DD-12, FR-31):
+/// writes the state at `t + θ h` from the step's start `y0`, end `y1` and stages
+/// `k[0..7]` (`k[6] = f(t + h, y1)`). Coefficients `D1`–`D7` and the form of
+/// `CONTD5` from Hairer's `dopri5.f`
+/// (<https://www.unige.ch/~hairer/prog/nonstiff/dopri5.f>).
+pub fn dopri5_dense(theta: f64, h: f64, y0: &[f64], y1: &[f64], k: &[Vec<f64>], out: &mut [f64]) {
+    const D1: f64 = -12715105075.0 / 11282082432.0;
+    const D3: f64 = 87487479700.0 / 32700410799.0;
+    const D4: f64 = -10690763975.0 / 1880347072.0;
+    const D5: f64 = 701980252875.0 / 199316789632.0;
+    const D6: f64 = -1453857185.0 / 822651844.0;
+    const D7: f64 = 69997945.0 / 29380423.0;
+    let s = 1.0 - theta;
+    for i in 0..out.len() {
+        let ydiff = y1[i] - y0[i];
+        let bspl = h * k[0][i] - ydiff;
+        let c3 = ydiff - h * k[6][i] - bspl;
+        let c4 = h
+            * (D1 * k[0][i]
+                + D3 * k[2][i]
+                + D4 * k[3][i]
+                + D5 * k[4][i]
+                + D6 * k[5][i]
+                + D7 * k[6][i]);
+        out[i] = y0[i] + theta * (ydiff + s * (bspl + theta * (c3 + s * c4)));
+    }
+}
+
+/// A root of `g` on `[0, 1]` by the Illinois method (DD-12, FR-31), given
+/// `g0 = g(0) ≠ 0` and `g1 = g(1)` of the other sign or zero. Returns a point where
+/// `g` was evaluated to exactly zero, or the end of a bracket at most `4ε` wide on
+/// the side of `g1`, so the root found is never before the sign change. When two
+/// steps in a row do not halve the bracket, the next step bisects: the bracket
+/// halves at least every three steps, so it always closes within the 200
+/// evaluations allowed (PR #41).
+pub fn illinois<G: FnMut(f64) -> f64 + ?Sized>(g: &mut G, g0: f64, g1: f64) -> f64 {
+    // The weights wa, wb start as g(a), g(b) and are halved by the Illinois rule, so
+    // they may underflow to zero: only an evaluated zero ends the search (PR #41).
+    let (mut a, mut wa, mut b, mut wb) = (0.0, g0, 1.0, g1);
+    let mut zero = g1 == 0.0;
+    // Which end was kept last: halve the other end's weight when the same end stays twice.
+    let mut kept = 0;
+    // The bracket width at the last halving, and the steps since then.
+    let (mut halved_at, mut stalled) = (1.0, 0);
+    for _ in 0..200 {
+        if zero || b - a <= 4.0 * f64::EPSILON {
+            break;
+        }
+        let mut c = (a * wb - b * wa) / (wb - wa);
+        if stalled >= 2 || !(c > a && c < b) {
+            c = 0.5 * (a + b);
+        }
+        let gc = g(c);
+        if gc == 0.0 || gc.signum() == g1.signum() {
+            (b, wb, zero) = (c, gc, gc == 0.0);
+            if kept == -1 {
+                wa *= 0.5;
+            }
+            kept = -1;
+        } else {
+            (a, wa) = (c, gc);
+            if kept == 1 {
+                wb *= 0.5;
+            }
+            kept = 1;
+        }
+        if b - a <= 0.5 * halved_at {
+            (halved_at, stalled) = (b - a, 0);
+        } else {
+            stalled += 1;
+        }
+    }
+    b
+}
+
 /// Dormand–Prince 5(4) coefficients (Dormand & Prince, J. Comput. Appl. Math. 6(1),
 /// 19–26, 1980). `A[i]` holds row `i + 1` of the Butcher matrix.
 pub mod dopri5 {
@@ -167,6 +261,112 @@ mod tests {
             core::mem::swap(&mut y, &mut y_new);
         }
         (y[0] - 1f64.sin().exp()).abs()
+    }
+
+    #[test]
+    fn illinois_always_returns_a_closed_bracket_or_a_zero() {
+        // TC-U29: the condition itself, for g monotone near the root: g(b) = 0, or
+        // g(b) has the sign of g(1) and g(b − 4ε) the other sign. PR #41 reviews 4 and
+        // 5 (Codex): a ratio of 1e30 between the ends, and a weight that underflows.
+        type Case = (&'static str, fn(f64) -> f64);
+        let cases: [Case; 6] = [
+            ("cubic", |x| x * x * x - 0.2),
+            ("sqrt", |x| x.sqrt() - 0.5),
+            ("x^100", |x| x.powi(100) - 0.5f64.powi(100)),
+            ("exp", |x| (50.0 * x).exp() - 2.0),
+            ("falling", |x| 0.3 - x),
+            ("subnormal", |x| {
+                (x - 0.9) * (-7420.0 * (x - 0.9).max(0.0)).exp()
+            }),
+        ];
+        for (name, g) in cases {
+            let (g0, g1) = (g(0.0), g(1.0));
+            let b = illinois(&mut |x: f64| g(x), g0, g1);
+            let gb = g(b);
+            let closed = gb == 0.0
+                || (gb.signum() == g1.signum()
+                    && g(b - 4.0 * f64::EPSILON).signum() == g0.signum());
+            assert!(closed, "{name}: b = {b}, g(b) = {gb:e}");
+        }
+    }
+
+    #[test]
+    fn dopri5_dense_output_is_fourth_order() {
+        // TC-U29: the error at the middle of one step of y' = y cos t from t = 0 is
+        // O(h⁵) (order 4), and the ends are the step's own values.
+        let mut f = |t: f64, y: &[f64], out: &mut [f64]| out[0] = y[0] * t.cos();
+        let mut mid_error = |h: f64| {
+            let mut w = Work::new(7, 1);
+            let (y, mut y_new, mut err, mut out) = ([1.0], [0.0], [0.0], [0.0]);
+            f(0.0, &y, &mut w.k[0]);
+            dopri5_step(&mut f, 0.0, &y, h, &mut w, &mut y_new, &mut err);
+            dopri5_dense(0.0, h, &y, &y_new, &w.k, &mut out);
+            assert_eq!(out[0], y[0]);
+            dopri5_dense(1.0, h, &y, &y_new, &w.k, &mut out);
+            assert!((out[0] - y_new[0]).abs() <= 2.0 * f64::EPSILON);
+            dopri5_dense(0.5, h, &y, &y_new, &w.k, &mut out);
+            (out[0] - (0.5 * h).sin().exp()).abs()
+        };
+        let order = (mid_error(0.2) / mid_error(0.1)).log2();
+        assert!((order - 5.0).abs() <= 0.3, "local order {order}");
+    }
+
+    #[test]
+    fn hermite_is_exact_for_cubics() {
+        // TC-U29: y = t³ − 2t on [0.5, 2], with y' = 3t² − 2 at the ends.
+        let (a, h) = (0.5, 1.5);
+        let y = |t: f64| t * t * t - 2.0 * t;
+        let dy = |t: f64| 3.0 * t * t - 2.0;
+        let mut out = [0.0];
+        for theta in [0.0, 0.1, 0.5, 0.9, 1.0] {
+            hermite(
+                theta,
+                h,
+                &[y(a)],
+                &[dy(a)],
+                &[y(a + h)],
+                &[dy(a + h)],
+                &mut out,
+            );
+            assert!((out[0] - y(a + theta * h)).abs() < 1e-14, "θ = {theta}");
+        }
+    }
+
+    #[test]
+    fn illinois_returns_the_root_from_the_far_side() {
+        // TC-U29: root of θ³ − 0.2 at 0.2^(1/3); the result is never before it.
+        let mut calls = 0;
+        let mut g = |x: f64| {
+            calls += 1;
+            x * x * x - 0.2
+        };
+        let root = illinois(&mut g, -0.2, 0.8);
+        let exact = 0.2f64.cbrt();
+        assert!(
+            root >= exact && root - exact <= 4.0 * f64::EPSILON,
+            "{root} vs {exact}"
+        );
+        assert!(calls < 20, "{calls} evaluations");
+        // A concave g keeps the other end; without halving, either case takes over 50.
+        let mut calls = 0;
+        let mut g = |x: f64| {
+            calls += 1;
+            x.sqrt() - 0.5
+        };
+        let root = illinois(&mut g, -0.5, 0.5);
+        assert!(root >= 0.25 && root - 0.25 <= 4.0 * f64::EPSILON, "{root}");
+        assert!(calls < 20, "{calls} evaluations");
+        // PR #41 fourth review (Codex): g(1)/|g(0)| ≈ 1e30 stalls the Illinois weights;
+        // the bracket must still close on the root.
+        let c = 0.5f64.powi(100);
+        let mut g = |x: f64| x.powi(100) - c;
+        let root = illinois(&mut g, -c, 1.0 - c);
+        assert!(root >= 0.5 && root - 0.5 <= 4.0 * f64::EPSILON, "{root}");
+        // Falling, and a zero at the end of the step.
+        let mut g = |x: f64| 0.3 - x;
+        let root = illinois(&mut g, 0.3, -0.7);
+        assert!(root >= 0.3 && root - 0.3 <= 4.0 * f64::EPSILON, "{root}");
+        assert_eq!(illinois(&mut |x: f64| x - 1.0, -1.0, 0.0), 1.0);
     }
 
     #[test]

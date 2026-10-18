@@ -119,7 +119,7 @@ and its perihelion advances by $`\Delta\varphi \approx 6\pi GM / \bigl(c^2 a (1 
 }
 ```
 
-The example starts Mercury at perihelion, solves for one orbit, and finds the next perihelion (where $`dr/d\tau`$ changes sign) by bisection.
+The example starts Mercury at perihelion, solves for one orbit, and finds the next perihelion (where $`dr/d\tau`$ changes sign) with event detection: `Event::new(|_tau, y| dr/dτ).rising()`.
 
 Result: $`5.0187\times10^{-7}`$ rad per orbit, equal to the formula to $`10^{-3}`$, which is **42.98″ per century**.
 
@@ -151,7 +151,3 @@ The small differences ($`6\times10^{-6}`$ at 1 R☉) are the next term of the se
 Near a black hole the same code bends rays by large angles. Below $`b = \tfrac{3\sqrt{3}}{2} r_s \approx 2.6\,r_s`$ they fall in.
 
 ![Light rays around a black hole](figures/light_bending.svg)
-
-## What is not shown
-
-- There is no event detection in the ODE solvers; `grav03_perihelion` finds perihelia by bisection on the steps.

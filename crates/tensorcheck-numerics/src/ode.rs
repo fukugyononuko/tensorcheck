@@ -1,4 +1,5 @@
-//! Ordinary differential equations that keep dimensions (API-13, API-40 to API-45).
+//! Ordinary differential equations that keep dimensions (API-13, API-40 to API-45,
+//! API-57 to API-59).
 //!
 //! One entry point, [`solve_ivp`], for systems `dy/dt = f(t, y)` of any size. Write
 //! higher-order equations as first-order systems: for `x'' = a(x)`, use the state
@@ -300,6 +301,7 @@ where
         tol.rtol,
         &tol.atol,
         &mut |_, _| {},
+        &mut (),
     )
 }
 
@@ -330,5 +332,223 @@ where
         tol.rtol,
         &tol.atol,
         &mut on_step,
+        &mut (),
     )
+}
+
+/// A condition `g(t, y) = 0` to find while solving (API-58, FR-31). `g` returns a
+/// quantity of any dimension. By default, every sign change is recorded and the
+/// solve goes on.
+///
+/// ```
+/// use tensorcheck::Quantity;
+/// use tensorcheck::units::si::{Dimensionless, Frequency, Time, one, s};
+/// use tensorcheck_numerics::ode::{DormandPrince54, Event, Tolerance, solve_ivp_events};
+///
+/// // y = t: stop where y reaches 0.5.
+/// let rhs = |_t: Quantity<Time>, _y: &Quantity<Dimensionless>| -> Quantity<Frequency> { 1.0 * (one / s) };
+/// let half = Event::new(|_t: Quantity<Time>, y: &Quantity<Dimensionless>| *y - 0.5 * one).terminal();
+/// let tol = Tolerance { rtol: 1e-10, atol: 1e-12 * one };
+/// let sol = solve_ivp_events(rhs, (0.0 * s)..(1.0 * s), 0.0 * one, DormandPrince54, tol, half).unwrap();
+/// assert!((sol.t.value_in(s) - 0.5).abs() < 1e-12);
+/// assert_eq!(sol.events.len(), 1);
+/// ```
+#[derive(Clone, Copy, Debug)]
+pub struct Event<G> {
+    g: G,
+    rising: bool,
+    falling: bool,
+    terminal: bool,
+}
+impl<G> Event<G> {
+    /// Records every zero crossing of `g` and goes on.
+    pub fn new(g: G) -> Self {
+        Event {
+            g,
+            rising: true,
+            falling: true,
+            terminal: false,
+        }
+    }
+    /// Only crossings from negative to zero or positive.
+    pub fn rising(self) -> Self {
+        Event {
+            falling: false,
+            ..self
+        }
+    }
+    /// Only crossings from positive to zero or negative.
+    pub fn falling(self) -> Self {
+        Event {
+            rising: false,
+            ..self
+        }
+    }
+    /// Stops the solve at the first event.
+    pub fn terminal(self) -> Self {
+        Event {
+            terminal: true,
+            ..self
+        }
+    }
+}
+
+/// Where an event happened (API-59).
+pub struct Crossing<T, Y> {
+    /// The time of the event.
+    pub t: Quantity<T>,
+    /// The state at that time, interpolated within the step (DD-12): the
+    /// continuous extension of order 4 for [`DormandPrince54`], cubic Hermite
+    /// interpolation for [`Rk4`] and [`Rosenbrock`].
+    pub y: Y,
+}
+
+/// The result of [`solve_ivp_events`] (API-59): the state at the end, or at the
+/// event when the event is terminal, and the events in time order.
+pub struct EventSolution<T, Y> {
+    /// The final time: the end of the interval, or the time of a terminal event.
+    pub t: Quantity<T>,
+    /// The final state.
+    pub y: Y,
+    /// Counters.
+    pub stats: Stats,
+    /// The events found.
+    pub events: Vec<Crossing<T, Y>>,
+}
+
+impl<T, Y: Clone> Clone for Crossing<T, Y> {
+    fn clone(&self) -> Self {
+        Crossing {
+            t: self.t,
+            y: self.y.clone(),
+        }
+    }
+}
+impl<T, Y: fmt::Debug> fmt::Debug for Crossing<T, Y> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Crossing")
+            .field("t (base units)", &self.t.base_value())
+            .field("y", &self.y)
+            .finish()
+    }
+}
+impl<T, Y: Clone> Clone for EventSolution<T, Y> {
+    fn clone(&self) -> Self {
+        EventSolution {
+            t: self.t,
+            y: self.y.clone(),
+            stats: self.stats,
+            events: self.events.clone(),
+        }
+    }
+}
+impl<T, Y: fmt::Debug> fmt::Debug for EventSolution<T, Y> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EventSolution")
+            .field("t (base units)", &self.t.base_value())
+            .field("y", &self.y)
+            .field("stats", &self.stats)
+            .field("events", &self.events)
+            .finish()
+    }
+}
+
+/// An [`Event`] as the solver sees it, collecting the crossings.
+struct Watcher<G, T, Y> {
+    event: Event<G>,
+    found: Vec<Crossing<T, Y>>,
+}
+impl<G, T, Y, D> solver::Watch for Watcher<G, T, Y>
+where
+    G: FnMut(Quantity<T>, &Y) -> Quantity<D>,
+    Y: VectorSpace,
+{
+    const ACTIVE: bool = true;
+    fn value(&mut self, t: f64, y: &[f64]) -> f64 {
+        (self.event.g)(
+            Quantity::from_base_components(t),
+            &Y::from_components(|i| y[i]),
+        )
+        .base_value()
+    }
+    fn wants(&self, g_before: f64) -> bool {
+        (self.event.rising && g_before < 0.0) || (self.event.falling && g_before > 0.0)
+    }
+    fn terminal(&self) -> bool {
+        self.event.terminal
+    }
+    fn record(&mut self, t: f64, y: &[f64]) {
+        self.found.push(Crossing {
+            t: Quantity::from_base_components(t),
+            y: Y::from_components(|i| y[i]),
+        });
+    }
+}
+
+/// Like [`solve_ivp`], finding where `g(t, y)` of `event` crosses zero (API-59,
+/// FR-31). The sign of `g` is checked at the end of every accepted step; in a step
+/// where it changes, the time is found on the interpolant of the step (no
+/// re-solving; see [`Crossing::y`]). Two sign changes within one step are missed, and a zero exactly
+/// at the start is not an event. `g` returning NaN or infinity gives
+/// [`SolveError::NonFinite`]. Rejected input calls neither `f` nor `g`.
+pub fn solve_ivp_events<T, Y, R, F, A, M, G, D>(
+    f: F,
+    span: Range<Quantity<T>>,
+    y0: Y,
+    method: M,
+    tol: Tolerance<A>,
+    event: Event<G>,
+) -> Result<EventSolution<T, Y>, SolveError<T>>
+where
+    F: FnMut(Quantity<T>, &Y) -> R,
+    Y: VectorSpace + PerDim<T>,
+    R: VectorSpace + RhsReturns<<Y as PerDim<T>>::Out>,
+    A: VectorSpace + ToleranceFor<Y>,
+    M: Method,
+    G: FnMut(Quantity<T>, &Y) -> Quantity<D>,
+{
+    solve_ivp_events_with(f, span, y0, method, tol, event, |_, _| {})
+}
+
+/// Like [`solve_ivp_events`], calling `on_step(t, &y)` after every accepted step
+/// (API-59). A terminal event ends the calls with the event point.
+pub fn solve_ivp_events_with<T, Y, R, F, A, M, G, D, O>(
+    f: F,
+    span: Range<Quantity<T>>,
+    y0: Y,
+    method: M,
+    tol: Tolerance<A>,
+    event: Event<G>,
+    mut on_step: O,
+) -> Result<EventSolution<T, Y>, SolveError<T>>
+where
+    F: FnMut(Quantity<T>, &Y) -> R,
+    Y: VectorSpace + PerDim<T>,
+    R: VectorSpace + RhsReturns<<Y as PerDim<T>>::Out>,
+    A: VectorSpace + ToleranceFor<Y>,
+    M: Method,
+    G: FnMut(Quantity<T>, &Y) -> Quantity<D>,
+    O: FnMut(Quantity<T>, &Y),
+{
+    let mut watcher = Watcher {
+        event,
+        found: Vec::new(),
+    };
+    let sol = solver::solve_ivp(
+        f,
+        span,
+        y0,
+        method.kind(),
+        method.step_limit(),
+        tol.rtol,
+        &tol.atol,
+        &mut on_step,
+        &mut watcher,
+    )?;
+    Ok(EventSolution {
+        t: sol.t,
+        y: sol.y,
+        stats: sol.stats,
+        events: watcher.found,
+    })
 }

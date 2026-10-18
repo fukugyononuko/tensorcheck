@@ -10,9 +10,9 @@ mod common;
 
 use common::{GeoState, Phi, R, SchwarzschildMetric, c, gm_sun, schwarzschild_radius, write_csv};
 use std::f64::consts::PI;
-use tensorcheck::units::si::{Dimensionless, Length, m, one, rad, s};
+use tensorcheck::units::si::{Dimensionless, Length, Time, Velocity, m, one, rad, s};
 use tensorcheck::{Point, Quantity, Vector};
-use tensorcheck_numerics::ode::{DormandPrince54, Tolerance, solve_ivp, solve_ivp_with};
+use tensorcheck_numerics::ode::{DormandPrince54, Event, Tolerance, solve_ivp_events_with};
 use tensorcheck_numerics::quad::{self, GaussKronrod, integrate};
 
 /// The state at perihelion `r_p` of the bound orbit with aphelion `r_a`, in the
@@ -93,47 +93,26 @@ fn tolerance(r_scale: f64) -> Tolerance<GeoState> {
 fn perihelia(rs: f64, y0: GeoState, tau_end: f64) -> (Vec<f64>, Vec<Vec<f64>>) {
     let g = SchwarzschildMetric::new(rs * m);
     let tol = tolerance(y0.0.coord(R));
-    let mut steps: Vec<(f64, GeoState)> = vec![(0.0, y0)];
     let mut path = Vec::new();
-    solve_ivp_with(
+    // dr/dτ goes from negative to positive at a perihelion.
+    let perihelion = Event::new(|_tau: Quantity<Time>, y: &GeoState| -> Quantity<Velocity> {
+        y.1.base_components()[1] * (m / s)
+    })
+    .rising();
+    let sol = solve_ivp_events_with(
         geodesic_rhs!(&g),
         (0.0 * s)..(tau_end * s),
         y0,
         DormandPrince54,
         tol,
-        |t, y| {
-            steps.push((t.value_in(s), *y));
+        perihelion,
+        |_, y| {
             let (r, f) = (y.0.coord(R), y.0.coord(Phi));
             path.push(vec![r * f.cos() / rs, r * f.sin() / rs]);
         },
     )
     .unwrap();
-
-    // dr/dτ goes from negative to positive at a perihelion: bisect on the step.
-    let mut found = Vec::new();
-    for w in steps.windows(2) {
-        let ((t0, y_a), (t1, y_b)) = (w[0], w[1]);
-        let ur = |y: &GeoState| y.1.base_components()[1];
-        if !(ur(&y_a) < 0.0 && ur(&y_b) >= 0.0) {
-            continue;
-        }
-        let (mut lo, mut hi) = (0.0, t1 - t0);
-        let mut y_mid = y_a;
-        for _ in 0..60 {
-            let mid = 0.5 * (lo + hi);
-            y_mid = solve_ivp(
-                geodesic_rhs!(&g),
-                (0.0 * s)..(mid * s),
-                y_a,
-                DormandPrince54,
-                tol,
-            )
-            .unwrap()
-            .y;
-            if ur(&y_mid) < 0.0 { lo = mid } else { hi = mid }
-        }
-        found.push(y_mid.0.coord(Phi));
-    }
+    let found = sol.events.iter().map(|e| e.y.0.coord(Phi)).collect();
     (found, path)
 }
 
