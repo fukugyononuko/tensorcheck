@@ -27,13 +27,16 @@ def git(*args: str) -> str:
 
 
 def main_worktree() -> Path:
-    """git worktree の元の作業ツリー。core.worktree があればそれ、なければ共通の .git の親。
+    """git worktree の元の作業ツリー。core.worktree があればそれ（相対パスなら git と同じく共通の .git を基準にする）、
+    なければ共通の .git の親。
 
     .git を外に置き core.worktree もない構成（git init --separate-git-dir の既定）では、git に元の作業ツリーの
     記録がないので、返すのは共通の .git の親（元の作業ツリーではない）。そのときは禁止語が見つからず、手元では失敗する。
     """
     configured = subprocess.run(["git", "config", "--get", "core.worktree"], capture_output=True, text=True).stdout.strip()
-    return Path(configured) if configured else Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()).parent
+    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip())
+    # 絶対パスなら、つないでもそのまま
+    return (common / configured).resolve() if configured else common.parent
 
 
 def read_denylist() -> str:
