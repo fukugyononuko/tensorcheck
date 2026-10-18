@@ -91,7 +91,7 @@
 | API-43 | `ode::Tolerance { rtol, atol }` | 許容値。`rtol` は無次元の数、`atol` は状態と同じ型。どちらも有限で 0 以上、成分ごとに少なくとも一方が正（DD-13） |
 | API-44 | `ode::Solution { t, y, stats }`、`ode::SolveError` | 解と、失敗（`MaxSteps`、`StepTooSmall`、`NonFinite`、`Singular`、入力の誤り `InvalidTolerance`・`InvalidStep`・`InvalidSpan`）。`e.time()` で失敗した時刻を取り出せる（入力の誤りでは `None`） |
 | API-45 | `ode::solve_ivp_with(f, ..., on_step)` | 受け入れた各歩で呼ばれる関数を渡す（途中の値を記録するため） |
-| API-58 | `ode::Event::new(g).rising()`、`.falling()`、`.terminal()` | イベントの条件（FR-31）。`g(t, &y)` は次元つきの量（`Quantity<G>`、`G` は任意の次元）を返す。既定は両方の向きで、止まらずに記録する。`.rising()` は負から 0 以上へ、`.falling()` は正から 0 以下へ変わるときだけ。`.terminal()` は最初のイベントで止まる |
+| API-58 | `ode::Event::new(g).rising()`、`.falling()`、`.terminal()` | イベントの条件（FR-31）。`g(t, &y)` は次元つきの量（`Quantity<G>`、`G` は任意の次元）を返す。既定は両方の向きで、止まらずに記録する。`.rising()` は負から 0 以上へ、`.falling()` は正から 0 以下へ変わるときだけ。`.terminal()` は最初のイベントで止まる。`g` は補間した軌道の上で連続であること。不連続なら、符号が跳ぶ点をイベントとして返す（issue #42） |
 | API-59 | `ode::solve_ivp_events(f, t0..t1, y0, method, tol, event)`、`ode::solve_ivp_events_with(…, event, on_step)` | イベントを見つけながら解く。結果は `EventSolution { t, y, stats, events }`、`events` は時刻の順の `Crossing { t, y }`。止まったときは `t`・`y` がイベントの時刻と状態。`Crossing` の状態は刻みの中の補間の値（DD-12）。失敗は `solve_ivp` と同じ `SolveError`（`g` が有限でない値を返したら `NonFinite`） |
 | API-46 | `quad::integrate(f, a..b, method, tol)` | 定積分 $`\int_a^b f(x)\,dx`$。結果の型は `<Y as VectorSpace>::Times<X>`（$`[f]\,[x]`$） |
 | API-47 | `quad::{Trapezoid { n }, Simpson { n }, Romberg, GaussLegendre { n }, GaussKronrod}`、`quad::Tolerance { rtol, atol }` | 解法と許容値。`GaussKronrod` は適応型（7 点 Gauss、15 点 Kronrod）。`atol` は結果と同じ型 |

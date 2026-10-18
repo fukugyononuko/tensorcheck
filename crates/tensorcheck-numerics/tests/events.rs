@@ -496,6 +496,41 @@ fn a_steep_g_is_still_located() {
 }
 
 #[test]
+fn a_discontinuous_g_gives_the_point_where_the_sign_jumps() {
+    // Issue #42 (PR #41 sixth review, Codex): g has no zero, only a jump of sign. The
+    // event is the end of the closed bracket on the side of the sign after the change.
+    fn check(name: &str, g: fn(f64) -> f64, jump: f64) {
+        let sol = solve_ivp_events(
+            ramp,
+            (0.0 * s)..(1.0 * s),
+            0.0 * m,
+            Rk4 { h: 1.0 },
+            ramp_tol(),
+            Event::new(move |t: Quantity<Time>, _y: &Quantity<Length>| g(t.value_in(s)) * m)
+                .terminal(),
+        )
+        .unwrap();
+        assert_eq!(sol.events.len(), 1, "{name}");
+        let b = sol.t.value_in(s);
+        let after = g(1.0).signum();
+        assert_eq!(g(b).signum(), after, "{name}: g({b}) = {}", g(b));
+        assert_eq!(
+            g(b - 4.0 * f64::EPSILON).signum(),
+            -after,
+            "{name}: bracket not closed at {b}"
+        );
+        assert!((b - jump).abs() <= 4.0 * f64::EPSILON, "{name}: t = {b}");
+    }
+    check("step at 0.5", |t| if t < 0.5 { -1.0 } else { 1.0 }, 0.5);
+    check(
+        "falling step at 0.3",
+        |t| if t < 0.3 { 2.0 } else { -3.0 },
+        0.3,
+    );
+    check("pole at 0.7", |t| 1.0 / (0.7 - t), 0.7);
+}
+
+#[test]
 fn a_tiny_g_beyond_the_root_does_not_end_the_search() {
     // PR #41 fifth review (Codex): g(1) = 5e-324; halving that weight gives 0, which
     // was taken for a root at t = 1. The only root is t = 0.9.

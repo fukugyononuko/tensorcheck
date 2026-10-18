@@ -107,6 +107,7 @@ Contraction plans are computed at compile time for each combination of types, so
 - `transform` needs every index in the source chart.
 - The Rosenbrock solver uses a numerical Jacobian; user-supplied Jacobians are planned.
 - Event detection takes one condition per solve, and misses two sign changes within one step.
+- Event functions must be continuous along the solution: where `g` jumps in sign without a zero, the jump is reported as an event.
 - Requires `std` (no `no_std` yet).
 
 ## How it differs from existing crates
