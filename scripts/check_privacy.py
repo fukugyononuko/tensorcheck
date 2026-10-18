@@ -32,16 +32,21 @@ def main_worktree() -> Path | None:
     core.worktree があればそれ（相対パスなら git と同じく共通の .git を基準にする）。なければ、共通の .git が
     その親の .git そのものであるとき（通常の構成）だけ、その親を元の作業ツリーとする。.git を外に置き core.worktree も
     ない構成（git init --separate-git-dir の既定）では、git に元の作業ツリーの記録がないので None を返す。
+    bare リポジトリのように、その場所を git が作業ツリーとして扱わないときも None を返す。
     そこにある関係のない .privacy-denylist を使わず、手元では失敗させるため。
     """
     configured = subprocess.run(["git", "config", "--get", "core.worktree"], capture_output=True, text=True).stdout.strip()
     common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()).resolve()
     if configured:
         # 絶対パスなら、つないでもそのまま
-        return (common / configured).resolve()
-    if (common.parent / ".git").resolve() == common:
-        return common.parent
-    return None
+        candidate = (common / configured).resolve()
+    elif (common.parent / ".git").resolve() == common:
+        candidate = common.parent
+    else:
+        return None
+    # git が作業ツリーとして扱う場所だけを使う（bare リポジトリ meta/.git の親 meta は作業ツリーでない）
+    inside = subprocess.run(["git", "-C", str(candidate), "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True)
+    return candidate if inside.stdout.strip() == "true" else None
 
 
 def read_denylist() -> str:
