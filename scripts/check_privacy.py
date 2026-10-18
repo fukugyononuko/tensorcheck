@@ -27,33 +27,19 @@ def git(*args: str) -> str:
 
 
 def main_worktree() -> Path | None:
-    """git worktree の元の作業ツリー。わからなければ None。
+    """git worktree の元の作業ツリー。通常の構成でなければ None。
 
-    core.worktree があればそれ（相対パスなら git と同じく共通の .git を基準にする）。なければ、共通の .git が
-    その親の .git そのものであるとき（通常の構成）だけ、その親を元の作業ツリーとする。.git を外に置き core.worktree も
-    ない構成（git init --separate-git-dir の既定）では、git に元の作業ツリーの記録がないので None を返す。
-    bare リポジトリのように、その場所を git が作業ツリーとして扱わないときも None を返す。
-    そこにある関係のない .privacy-denylist を使わず、手元では失敗させるため。
+    通常の構成とは、共通の .git がその親の .git そのもので、その親を git が作業ツリーとして扱うこと。
+    それ以外（.git を外に置く --separate-git-dir、bare リポジトリ、core.worktree を使う構成）では探さない。
+    git の設定の解釈を真似ると、外れたときに関係のない .privacy-denylist を使うおそれがあるため（PR #45 のレビュー）。
+    そのときは手元では失敗し、PRIVACY_DENYLIST で与えてもらう。
     """
     common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()).resolve()
-    # 元の作業ツリーの設定は、元の作業ツリーの設定ファイルから読む（今の worktree の設定を経由しない）。
-    # extensions.worktreeConfig では config.worktree に、そうでなければ共通の config に入る
-    configured = ""
-    for name in ("config.worktree", "config"):
-        if (common / name).exists():
-            found = subprocess.run(["git", "config", "--file", str(common / name), "--get", "core.worktree"], capture_output=True, text=True)
-            if configured := found.stdout.strip():
-                break
-    if configured:
-        # 絶対パスなら、つないでもそのまま
-        candidate = (common / configured).resolve()
-    elif (common.parent / ".git").resolve() == common:
-        candidate = common.parent
-    else:
+    if (common.parent / ".git").resolve() != common:
         return None
-    # git が作業ツリーとして扱う場所だけを使う（bare リポジトリ meta/.git の親 meta は作業ツリーでない）
-    inside = subprocess.run(["git", "-C", str(candidate), "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True)
-    return candidate if inside.stdout.strip() == "true" else None
+    # bare リポジトリ meta/.git の親 meta は作業ツリーでない
+    inside = subprocess.run(["git", "-C", str(common.parent), "rev-parse", "--is-inside-work-tree"], capture_output=True, text=True)
+    return common.parent if inside.stdout.strip() == "true" else None
 
 
 def read_denylist() -> str:

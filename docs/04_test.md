@@ -127,7 +127,7 @@
 | TC-N04 | NFR-06 | `#![deny(missing_docs)]` で、公開する項目にドキュメントがあること。doctest がすべて通ること | 警告 0 件、doctest 全通過 | CI |
 | TC-N05 | NFR-07 | エラー文、API ドキュメント、README、例題が英語であること | `crates/` の下のファイルと、ルートの `README.md` に日本語の文字が含まれないこと | CI |
 | TC-N06 | NFR-08 | TC-F のすべてが通ること | 全通過 | CI |
-| TC-N07 | NFR-13 | 個人情報の検査（`check_privacy.py`）。検査自体のテスト（`test_check_privacy.py`）で、一時の git リポジトリの元の作業ツリー・git worktree・その下の階層から実行して、元の作業ツリーの `.privacy-denylist` の語を見つけること、禁止語がどこにもないとき手元では失敗し CI では警告して成功することを確かめる（issue #43）。`.git` を作業ツリーの外に置いた構成では、`core.worktree`（絶対パスか、共通の `.git` を基準にした相対パス）があれば手元でも CI でも見つけ、なければ（共通の `.git` の親に関係のない `.privacy-denylist` があっても）手元では成功しないこと。`extensions.worktreeConfig` で `core.worktree` が共通の `.git` の `config.worktree` にあっても見つけること。bare リポジトリの worktree では、bare リポジトリの親の `.privacy-denylist` を使わないこと（PR #45 のレビュー） | 問題 0 件。検査自体のテストは 16 の場合がすべて期待どおり | CI |
+| TC-N07 | NFR-13 | 個人情報の検査（`check_privacy.py`）。検査自体のテスト（`test_check_privacy.py`）で、一時の git リポジトリを作って実行し、通常の構成では元の作業ツリー・git worktree・その下の階層から元の作業ツリーの `.privacy-denylist` の語を見つけること、通常でない構成（`--separate-git-dir`、bare リポジトリ、`core.worktree`）では元の作業ツリーを探さず、関係のない `.privacy-denylist` があっても手元では成功しないこと、禁止語がどこにもないとき手元では失敗し CI では警告して成功することを確かめる（issue #43、PR #45） | 問題 0 件。検査自体のテストは 13 の場合がすべて期待どおり | CI |
 | TC-N08 | NFR-14 | ワークフローの検査（`check_workflows.py`）、ブランチ保護と Actions の権限の設定 | 問題 0 件。設定は API で確かめる | CI、手元 |
 
 ## 4.7 変動性シナリオ（TC-R）
