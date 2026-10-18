@@ -26,24 +26,30 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
-def main_worktree() -> Path:
-    """git worktree の元の作業ツリー。core.worktree があればそれ（相対パスなら git と同じく共通の .git を基準にする）、
-    なければ共通の .git の親。
+def main_worktree() -> Path | None:
+    """git worktree の元の作業ツリー。わからなければ None。
 
-    .git を外に置き core.worktree もない構成（git init --separate-git-dir の既定）では、git に元の作業ツリーの
-    記録がないので、返すのは共通の .git の親（元の作業ツリーではない）。そのときは禁止語が見つからず、手元では失敗する。
+    core.worktree があればそれ（相対パスなら git と同じく共通の .git を基準にする）。なければ、共通の .git が
+    その親の .git そのものであるとき（通常の構成）だけ、その親を元の作業ツリーとする。.git を外に置き core.worktree も
+    ない構成（git init --separate-git-dir の既定）では、git に元の作業ツリーの記録がないので None を返す。
+    そこにある関係のない .privacy-denylist を使わず、手元では失敗させるため。
     """
     configured = subprocess.run(["git", "config", "--get", "core.worktree"], capture_output=True, text=True).stdout.strip()
-    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip())
-    # 絶対パスなら、つないでもそのまま
-    return (common / configured).resolve() if configured else common.parent
+    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()).resolve()
+    if configured:
+        # 絶対パスなら、つないでもそのまま
+        return (common / configured).resolve()
+    if (common.parent / ".git").resolve() == common:
+        return common.parent
+    return None
 
 
 def read_denylist() -> str:
     if os.environ.get("PRIVACY_DENYLIST"):
         return os.environ["PRIVACY_DENYLIST"]
     # git worktree の作業ツリーには管理外のファイルがないので、元の作業ツリーでも探す
-    for path in (Path(".privacy-denylist"), main_worktree() / ".privacy-denylist"):
+    main_tree = main_worktree()
+    for path in [Path(".privacy-denylist")] + ([main_tree / ".privacy-denylist"] if main_tree else []):
         if path.exists():
             return path.read_text(encoding="utf-8")
     return ""
@@ -61,7 +67,7 @@ def main() -> int:
     denylist = [w.strip().lower() for w in read_denylist().splitlines() if w.strip()]
     if not denylist and os.environ.get("CI") != "true":
         problems.append(
-            f"禁止語が見つかりません。PRIVACY_DENYLIST か .privacy-denylist（作業ツリーの直下か {main_worktree()}）で与えてください"
+            f"禁止語が見つかりません。PRIVACY_DENYLIST か .privacy-denylist（作業ツリーの直下か、git worktree の元の作業ツリーの直下）で与えてください"
         )
     elif not denylist:
         print("check_privacy: 禁止語が設定されていないため、文章の検査を飛ばしました（PRIVACY_DENYLIST か .privacy-denylist）")
