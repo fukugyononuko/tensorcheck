@@ -3,7 +3,7 @@
 1. コミットの作者・コミッターのアドレスが、許可したものだけであること
 2. 公開される文章（追跡しているファイル、すべてのコミットメッセージ、PR のタイトルと本文）に禁止語がないこと
    禁止語は公開リポジトリに書かず、環境変数 PRIVACY_DENYLIST（GitHub の Secret）か、
-   git 管理外のファイル .privacy-denylist（作業ツリーの直下、なければ git worktree の元の作業ツリーの直下）から読む。
+   git 管理外のファイル .privacy-denylist（作業ツリーの直下、なければ git worktree の元の作業ツリーの直下。main_worktree を参照）から読む。
    どれもなければ、CI では警告して検査を飛ばし、手元では失敗する（禁止語を照合せずに成功としないため。issue #43）。
 """
 
@@ -26,12 +26,21 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
+def main_worktree() -> Path:
+    """git worktree の元の作業ツリー。core.worktree があればそれ、なければ共通の .git の親。
+
+    .git を外に置き core.worktree もない構成（git init --separate-git-dir の既定）では、git に元の作業ツリーの
+    記録がないので、返すのは共通の .git の親（元の作業ツリーではない）。そのときは禁止語が見つからず、手元では失敗する。
+    """
+    configured = subprocess.run(["git", "config", "--get", "core.worktree"], capture_output=True, text=True).stdout.strip()
+    return Path(configured) if configured else Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()).parent
+
+
 def read_denylist() -> str:
     if os.environ.get("PRIVACY_DENYLIST"):
         return os.environ["PRIVACY_DENYLIST"]
-    # git worktree の作業ツリーには管理外のファイルがないので、元の作業ツリー（共通の .git の親）でも探す
-    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip())
-    for path in (Path(".privacy-denylist"), common.parent / ".privacy-denylist"):
+    # git worktree の作業ツリーには管理外のファイルがないので、元の作業ツリーでも探す
+    for path in (Path(".privacy-denylist"), main_worktree() / ".privacy-denylist"):
         if path.exists():
             return path.read_text(encoding="utf-8")
     return ""
@@ -48,7 +57,9 @@ def main() -> int:
 
     denylist = [w.strip().lower() for w in read_denylist().splitlines() if w.strip()]
     if not denylist and os.environ.get("CI") != "true":
-        problems.append("禁止語が見つかりません。PRIVACY_DENYLIST か .privacy-denylist で与えてください")
+        problems.append(
+            f"禁止語が見つかりません。PRIVACY_DENYLIST か .privacy-denylist（作業ツリーの直下か {main_worktree()}）で与えてください"
+        )
     elif not denylist:
         print("check_privacy: 禁止語が設定されていないため、文章の検査を飛ばしました（PRIVACY_DENYLIST か .privacy-denylist）")
     else:

@@ -3,7 +3,8 @@
 一時の git リポジトリ（と、その git worktree）を作り、check_privacy.py を実行して終了コードを確かめる。
 守る条件：手元（CI でない）での実行は、禁止語を実際に照合したときだけ成功する。
 
-- 元の作業ツリーにある .privacy-denylist の語を、元の作業ツリーでも worktree（その下の階層）でも見つけること
+- 元の作業ツリーにある .privacy-denylist の語を、元の作業ツリーでも worktree（その下の階層）でも見つけること。
+  .git を作業ツリーの外に置いた構成（--separate-git-dir）では、core.worktree があれば同じ。なければ手元では成功しないこと
 - 禁止語がどこにもないとき、手元では失敗し、CI（CI=true）では警告して成功すること
 - 禁止語があり、文章に含まれないときは成功し、照合した語数を表示すること
 """
@@ -26,11 +27,16 @@ def run(cwd: Path, ci: bool = False) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(SCRIPT)], cwd=cwd, env=env, capture_output=True, text=True)
 
 
-def make_repo(root: Path, text: str) -> tuple[Path, Path]:
-    """元の作業ツリーと worktree を作り、その 2 つのパスを返す。"""
+def make_repo(root: Path, text: str, separate: bool = False) -> tuple[Path, Path]:
+    """元の作業ツリーと worktree を作り、その 2 つのパスを返す。
+
+    separate なら、.git を作業ツリーの外に置く（git init --separate-git-dir）。共通の .git の親が元の作業ツリーでない構成。
+    """
     main = root / "main"
     main.mkdir(parents=True)
-    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=main, check=True)
+    (root / "meta").mkdir()
+    init = ["git", "init", "-q", "-b", "main"] + (["--separate-git-dir", str(root / "meta" / "repo.git")] if separate else [])
+    subprocess.run(init, cwd=main, check=True)
     (main / ".gitignore").write_text(".privacy-denylist\n", encoding="utf-8")
     (main / "README.md").write_text(text, encoding="utf-8")
     (main / "docs").mkdir()
@@ -58,6 +64,14 @@ def main() -> int:
         # 禁止語は直下の README.md にある。下の階層から実行しても、作業ツリー全体を照合すること
         expect("worktree の下の階層から実行しても見つける", run(worktree / "docs"), False, "禁止語（1 行目の語）")
 
+        main_tree, worktree = make_repo(Path(tmp) / "separate", f"contains {WORD}\n", separate=True)
+        (main_tree / ".privacy-denylist").write_text(f"{WORD}\n", encoding="utf-8")
+        # core.worktree がないと git に元の作業ツリーの記録がない。見つけられなくても、手元では成功しないこと
+        expect(".git が外で core.worktree がなければ、手元では成功しない", run(worktree), False, "禁止語が見つかりません")
+        subprocess.run(["git", "config", "core.worktree", str(main_tree)], cwd=main_tree, check=True)
+        expect(".git が外でも、core.worktree があれば worktree で見つける", run(worktree), False, "禁止語（1 行目の語）")
+        expect(".git が外でも、core.worktree があれば CI で検査を飛ばさない", run(worktree, ci=True), False, "禁止語（1 行目の語）")
+
         main_tree, worktree = make_repo(Path(tmp) / "clean", "nothing here\n")
         (main_tree / ".privacy-denylist").write_text(f"{WORD}\nanother\n", encoding="utf-8")
         expect("禁止語を含まなければ成功する（worktree）", run(worktree), True, "禁止語 2 語")
@@ -70,7 +84,7 @@ def main() -> int:
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
-    print("test_check_privacy: 7 つの場合がすべて期待どおりでした")
+    print("test_check_privacy: 10 の場合がすべて期待どおりでした")
     return 0
 
 
