@@ -8,6 +8,7 @@ python3 scripts/check_deps.py
 python3 scripts/check_english.py
 python3 scripts/check_math.py
 python3 scripts/check_privacy.py
+python3 scripts/test_check_privacy.py
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace

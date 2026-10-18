@@ -33,7 +33,10 @@ jobs:
       - name: Check math notation
         run: python3 scripts/check_math.py
       - name: Check privacy
-        run: python3 scripts/check_privacy.py
+        run: |
+          python3 scripts/check_privacy.py
+          # 禁止語の探し方（worktree・下の階層）と、禁止語がないときの手元・CI の違いを確かめる
+          python3 scripts/test_check_privacy.py
         env:
           PRIVACY_DENYLIST: ${{ secrets.PRIVACY_DENYLIST }}
           # 式をシェルに直接埋め込まず、環境変数として渡す（PR の本文によるコマンドの注入を防ぐ）

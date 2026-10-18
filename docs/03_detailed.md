@@ -56,7 +56,7 @@ crates/
     tests/  examples/  benches/
 ui/                             コンパイル失敗のケース（TC-F、DD-16）。ワークスペースの外
   src/bin/   err01_….rs 〜 err22_….rs, pass_correct_expressions.rs
-scripts/  check_privacy.py check_workflows.py check_layers.py test_check_layers.py
+scripts/  check_privacy.py test_check_privacy.py check_workflows.py check_layers.py test_check_layers.py
 ```
 
 - 層をまたいで共有する型（空間・座標系・枠・ラベル・点・テンソル性の印・枠の位置の印、フェーズ 5 からはテンソルの型 `Tensor` とその基本の作り方、対称性の印）は `src/contracts.rs` に置く。M03 も M01 もテンソルを作って返すので、テンソルの型を M01 に置くと Manager どうしの参照になるため。処理は持たない。Engine どうしが互いを参照せずに同じ型を使うため（The Method で、層の間のデータの契約を別にまとめるのと同じ）。どの層からも使えるが、契約自身は `access/`・`utility/` だけを使う（フェーズ 3 で追加）。

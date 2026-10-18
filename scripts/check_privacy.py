@@ -3,7 +3,8 @@
 1. コミットの作者・コミッターのアドレスが、許可したものだけであること
 2. 公開される文章（追跡しているファイル、すべてのコミットメッセージ、PR のタイトルと本文）に禁止語がないこと
    禁止語は公開リポジトリに書かず、環境変数 PRIVACY_DENYLIST（GitHub の Secret）か、
-   git 管理外のファイル .privacy-denylist から読む。どちらもなければ、この検査は飛ばして警告する。
+   git 管理外のファイル .privacy-denylist（作業ツリーの直下、なければ git worktree の元の作業ツリーの直下）から読む。
+   どれもなければ、CI では警告して検査を飛ばし、手元では失敗する（禁止語を照合せずに成功としないため。issue #43）。
 """
 
 import os
@@ -25,18 +26,30 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
+def read_denylist() -> str:
+    if os.environ.get("PRIVACY_DENYLIST"):
+        return os.environ["PRIVACY_DENYLIST"]
+    # git worktree の作業ツリーには管理外のファイルがないので、元の作業ツリー（共通の .git の親）でも探す
+    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip())
+    for path in (Path(".privacy-denylist"), common.parent / ".privacy-denylist"):
+        if path.exists():
+            return path.read_text(encoding="utf-8")
+    return ""
+
+
 def main() -> int:
+    # 下の階層から実行しても、作業ツリー全体を照合する
+    os.chdir(git("rev-parse", "--show-toplevel").strip())
     problems = []
     # On push, CI passes the blank between the empty title and body, so strip first.
     pr_text = os.environ.get("PR_TEXT", "").strip()
     identities = {e for e in git("log", "--format=%ae%n%ce").splitlines() if e}
     problems += [f"許可していないアドレスのコミットがあります：{e}" for e in sorted(identities - ALLOWED_EMAILS)]
 
-    raw = os.environ.get("PRIVACY_DENYLIST") or (
-        Path(".privacy-denylist").read_text(encoding="utf-8") if Path(".privacy-denylist").exists() else ""
-    )
-    denylist = [w.strip().lower() for w in raw.splitlines() if w.strip()]
-    if not denylist:
+    denylist = [w.strip().lower() for w in read_denylist().splitlines() if w.strip()]
+    if not denylist and os.environ.get("CI") != "true":
+        problems.append("禁止語が見つかりません。PRIVACY_DENYLIST か .privacy-denylist で与えてください")
+    elif not denylist:
         print("check_privacy: 禁止語が設定されていないため、文章の検査を飛ばしました（PRIVACY_DENYLIST か .privacy-denylist）")
     else:
         sources = [(f, Path(f).read_text(encoding="utf-8", errors="ignore")) for f in git("ls-files").splitlines() if TEXT_FILE.search(f)]
