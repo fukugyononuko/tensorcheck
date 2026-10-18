@@ -135,7 +135,7 @@ python3 scripts/check_layers.py
 python3 scripts/check_deps.py
 python3 scripts/check_english.py
 python3 scripts/check_workflows.py
-python3 scripts/check_privacy.py
+python3 scripts/check_privacy.py  # needs the denylist: PRIVACY_DENYLIST or .privacy-denylist
 python3 scripts/check_math.py
 ```
 

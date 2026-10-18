@@ -3,7 +3,8 @@
 1. コミットの作者・コミッターのアドレスが、許可したものだけであること
 2. 公開される文章（追跡しているファイル、すべてのコミットメッセージ、PR のタイトルと本文）に禁止語がないこと
    禁止語は公開リポジトリに書かず、環境変数 PRIVACY_DENYLIST（GitHub の Secret）か、
-   git 管理外のファイル .privacy-denylist から読む。どちらもなければ、この検査は飛ばして警告する。
+   git 管理外のファイル .privacy-denylist（作業ツリーの直下、なければ git worktree の元の作業ツリーの直下。main_worktree を参照）から読む。
+   どれもなければ、CI では警告して検査を飛ばし、手元では失敗する（禁止語を照合せずに成功としないため。issue #43）。
 """
 
 import os
@@ -25,18 +26,57 @@ def git(*args: str) -> str:
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
+def main_worktree() -> Path | None:
+    """git worktree の元の作業ツリー。通常の構成でなければ None。
+
+    通常の構成とは、共通の .git がその親の .git そのもので、その親を git が作業ツリーとして扱うこと。
+    それ以外（.git を外に置く --separate-git-dir、bare リポジトリ、core.worktree を使う構成）では探さない。
+    git の設定の解釈を真似ると、外れたときに関係のない .privacy-denylist を使うおそれがあるため（PR #45 のレビュー）。
+    そのときは手元では失敗し、PRIVACY_DENYLIST で与えてもらう。
+    """
+    common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip()).resolve()
+    if (common.parent / ".git").resolve() != common:
+        return None
+    # その親が、作業ツリーの直下そのものであること（親で動く git は、上で確かめた共通の .git を使う）。
+    # bare リポジトリ meta/.git の親 meta は作業ツリーでなく、core.worktree で外側を作業ツリーにした構成では、
+    # 親は作業ツリーの内側にあるだけ
+    top = subprocess.run(["git", "-C", str(common.parent), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    return common.parent if top.returncode == 0 and Path(top.stdout.strip()).resolve() == common.parent else None
+
+
+def denylist_sources():
+    """禁止語の出どころを優先順に 1 つずつ返す。後の出どころは、前に有効な語がなかったときだけ読む。"""
+    yield os.environ.get("PRIVACY_DENYLIST", "")
+    yield Path(".privacy-denylist").read_text(encoding="utf-8") if Path(".privacy-denylist").exists() else ""
+    # git worktree の作業ツリーには管理外のファイルがないので、元の作業ツリーでも探す
+    main_tree = main_worktree()
+    if main_tree and (main_tree / ".privacy-denylist").exists():
+        yield (main_tree / ".privacy-denylist").read_text(encoding="utf-8")
+
+
+def read_denylist() -> list[str]:
+    """禁止語の一覧。有効な語が 1 つもない出どころ（空白だけのファイルなど）は飛ばし、次の候補を見る。"""
+    for raw in denylist_sources():
+        if words := [w.strip().lower() for w in raw.splitlines() if w.strip()]:
+            return words
+    return []
+
+
 def main() -> int:
+    # 下の階層から実行しても、作業ツリー全体を照合する
+    os.chdir(git("rev-parse", "--show-toplevel").strip())
     problems = []
     # On push, CI passes the blank between the empty title and body, so strip first.
     pr_text = os.environ.get("PR_TEXT", "").strip()
     identities = {e for e in git("log", "--format=%ae%n%ce").splitlines() if e}
     problems += [f"許可していないアドレスのコミットがあります：{e}" for e in sorted(identities - ALLOWED_EMAILS)]
 
-    raw = os.environ.get("PRIVACY_DENYLIST") or (
-        Path(".privacy-denylist").read_text(encoding="utf-8") if Path(".privacy-denylist").exists() else ""
-    )
-    denylist = [w.strip().lower() for w in raw.splitlines() if w.strip()]
-    if not denylist:
+    denylist = read_denylist()
+    if not denylist and os.environ.get("CI") != "true":
+        problems.append(
+            f"禁止語が見つかりません。PRIVACY_DENYLIST か .privacy-denylist（作業ツリーの直下か、git worktree の元の作業ツリーの直下）で与えてください"
+        )
+    elif not denylist:
         print("check_privacy: 禁止語が設定されていないため、文章の検査を飛ばしました（PRIVACY_DENYLIST か .privacy-denylist）")
     else:
         sources = [(f, Path(f).read_text(encoding="utf-8", errors="ignore")) for f in git("ls-files").splitlines() if TEXT_FILE.search(f)]
