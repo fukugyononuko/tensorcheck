@@ -600,6 +600,48 @@ fn a_discontinuous_g_gives_the_point_where_the_sign_jumps() {
 }
 
 #[test]
+fn at_large_times_only_the_bracket_in_theta_is_bounded() {
+    // Issue #48 (PR #47 sixth review, Codex): g is evaluated at t_n + θ h rounded to
+    // f64. With t_n = 1e12 and h = ±1, θ h is exact and rounding is monotone, so the
+    // two ends of a bracket in θ at most 4ε wide have times that are equal or
+    // adjacent f64 values; they differ in sign, so they are adjacent. The time one
+    // f64 before the event, in the direction of integration, has the other sign.
+    let t0 = 1e12;
+    let jump = t0 + 0.5;
+    let g = move |t: f64| if t < jump { -1.0 } else { 1.0 };
+    for (name, span, before) in [
+        ("forward", t0..(t0 + 1.0), f64::next_down as fn(f64) -> f64),
+        ("backward", (t0 + 1.0)..t0, f64::next_up as fn(f64) -> f64),
+    ] {
+        let sol = solve_ivp_events(
+            ramp,
+            (span.start * s)..(span.end * s),
+            0.0 * m,
+            Rk4 { h: 1.0 },
+            ramp_tol(),
+            Event::new(move |t: Quantity<Time>, _y: &Quantity<Length>| g(t.value_in(s)) * m)
+                .terminal(),
+        )
+        .unwrap();
+        let b = sol.t.value_in(s);
+        let a = before(b);
+        assert_eq!(
+            g(b),
+            g(span.end),
+            "{name}: g({b}) is not on the side of the step end"
+        );
+        assert_eq!(
+            g(a),
+            -g(span.end),
+            "{name}: g({a}) next to {b} has the same sign"
+        );
+        // The times are further apart than 4ε times the step, so the documentation
+        // must not bound the width in time.
+        assert!((b - a).abs() > 4.0 * f64::EPSILON, "{name}: {b} − {a}");
+    }
+}
+
+#[test]
 fn a_tiny_g_beyond_the_root_does_not_end_the_search() {
     // PR #41 fifth review (Codex): g(1) = 5e-324; halving that weight gives 0, which
     // was taken for a root at t = 1. The only root is t = 0.9.

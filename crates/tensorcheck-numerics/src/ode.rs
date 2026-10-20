@@ -343,11 +343,17 @@ where
 /// `g` must be continuous along the interpolated solution. Only the sign of `g` is
 /// examined, so for a discontinuous `g` an event may be reported where `g` is not
 /// zero. In every case the event point is either a point where `g` was evaluated
-/// as exactly zero, or the end on the side of the step end (after the sign change
-/// in the direction of integration, so the earlier time when solving backward) of
-/// an interval at most 4ε times the step wide across which the sign of `g` changes
-/// (for a jump of sign, the interval holds the jump). If `g` is evaluated as NaN or infinity, for example exactly at a pole,
-/// the solve fails with [`SolveError::NonFinite`].
+/// as exactly zero, or the end `θ_b` on the side of the step end (after the sign
+/// change in the direction of integration, so the earlier time when solving
+/// backward) of an interval of `θ` at most 4ε wide across which the sign of `g`
+/// changes (for a jump of sign, the interval holds the jump). Here `θ` runs from 0
+/// to 1 over a step from `t_n` to `t_n + h`, and `g` is evaluated at, and the event
+/// is reported at, the time `t_n + θ h` rounded to `f64` (the step end time when
+/// `θ = 1`). Only the width in `θ` is bounded: the times of the two ends can be
+/// further apart than 4ε times the step, for example one `f64` spacing
+/// (1.2e-4 s) apart near 1e12 s (issue #48). If `g` is evaluated as NaN or
+/// infinity, for example exactly at a pole, the solve fails with
+/// [`SolveError::NonFinite`].
 ///
 /// ```
 /// use tensorcheck::Quantity;
