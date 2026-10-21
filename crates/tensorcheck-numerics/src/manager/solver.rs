@@ -299,12 +299,13 @@ fn watch<W: Watch + ?Sized, G: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn solve_ivp<T, Y, R, F, A, O, W>(
+pub(crate) fn solve_ivp<T, Y, R, F, J, A, O, W>(
     mut f: F,
     span: Range<Quantity<T>>,
     y0: Y,
     kind: OdeKind,
     max_steps: usize,
+    given_jacobian: &mut J,
     rtol: f64,
     atol: &A,
     on_step: &mut O,
@@ -314,6 +315,7 @@ where
     F: FnMut(Quantity<T>, &Y) -> R,
     Y: VectorSpace,
     R: VectorSpace,
+    J: FnMut(f64, &[f64], &mut [f64]) -> bool + ?Sized,
     A: VectorSpace,
     O: FnMut(Quantity<T>, &Y) + ?Sized,
     W: Watch + ?Sized,
@@ -485,6 +487,7 @@ where
             let mut f0 = vec![0.0; n];
             let mut ft = vec![0.0; n];
             let mut f1 = vec![0.0; n];
+            let mut jac = vec![0.0; n * n];
             let scale: Vec<f64> = atol.iter().map(|a| a.max(f64::MIN_POSITIVE)).collect();
             let t_scale = (t1 - t0).abs().max(f64::MIN_POSITIVE);
             rhs(t, &y, &mut f0);
@@ -500,14 +503,22 @@ where
                 if dir * (t + h - t1) > 0.0 {
                     h = t1 - t;
                 }
-                // Jacobian ∂f/∂y and time derivative ∂f/∂t at (t, y) by central differences (E08).
-                let tt = t;
-                let jac = jacobian_fd(
-                    &mut |yy: &[f64], out: &mut [f64]| rhs(tt, yy, out),
-                    &y,
-                    n,
-                    &scale,
-                );
+                // Jacobian ∂f/∂y at (t, y): the user's (FR-30), else central differences
+                // (E08). The user's must be finite (DD-15).
+                if given_jacobian(t, &y, &mut jac) {
+                    if !finite(&jac) {
+                        return Err(SolveError::NonFinite { t: at(t) });
+                    }
+                } else {
+                    let tt = t;
+                    jac = jacobian_fd(
+                        &mut |yy: &[f64], out: &mut [f64]| rhs(tt, yy, out),
+                        &y,
+                        n,
+                        &scale,
+                    );
+                }
+                // Time derivative ∂f/∂t at (t, y) by central differences (E08).
                 let yy = y.clone();
                 let dfdt = jacobian_fd(
                     &mut |ts: &[f64], out: &mut [f64]| rhs(ts[0], &yy, out),

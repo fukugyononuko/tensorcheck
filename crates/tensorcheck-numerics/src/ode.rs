@@ -18,9 +18,10 @@
 //! ```
 
 use core::fmt;
+use core::marker::PhantomData;
 use core::ops::Range;
 
-use tensorcheck::utility::diagnostics::{RhsReturns, ToleranceFor};
+use tensorcheck::utility::diagnostics::{JacobianReturns, RhsReturns, ToleranceFor};
 use tensorcheck::{PerDim, Quantity, VectorSpace};
 
 use crate::manager::solver;
@@ -40,9 +41,10 @@ pub struct DormandPrince54;
 /// RODAS (Hairer & Wanner): linearly implicit Rosenbrock method of order 4(3),
 /// L-stable and stiffly accurate, adaptive step size, for stiff problems.
 #[derive(Clone, Copy, Debug)]
-pub struct Rosenbrock {
-    /// How the Jacobian `∂f/∂y` is obtained.
-    pub jacobian: Jacobian,
+pub struct Rosenbrock<J = Jacobian> {
+    /// How the Jacobian `∂f/∂y` is obtained: [`Jacobian::Numerical`] or
+    /// [`Jacobian::given`].
+    pub jacobian: J,
 }
 
 /// How the Jacobian is obtained for [`Rosenbrock`].
@@ -52,8 +54,110 @@ pub enum Jacobian {
     Numerical,
 }
 
+impl Jacobian {
+    /// The Jacobian given by the user (API-60, FR-30), as the product
+    /// `jv(t, &y, &dy)` = `J(t, y)·dy`, the sum over `j` of `∂f/∂y_j · dy_j`. `dy`
+    /// has the type of the state and the result the type of the right-hand side
+    /// (ERR-23), so every entry `(i, j)` must have the dimension `[f_i]/[y_j]`: a
+    /// term of another dimension cannot be added to the sum (ERR-01).
+    ///
+    /// `jv` must be linear in `dy`; the solver builds the matrix from the products
+    /// with the unit vectors of the state in base units, at the start of every
+    /// step. `∂f/∂t` is still found by central differences (DD-15). A product with
+    /// a NaN or infinite component fails the solve with [`SolveError::NonFinite`]
+    /// at the step's start time. [`Stats::evaluations`] counts `f`, not `jv`.
+    ///
+    /// ```
+    /// use tensorcheck::Quantity;
+    /// use tensorcheck::units::si::{Dimensionless, Frequency, Time, one, s};
+    /// use tensorcheck_numerics::ode::{Jacobian, Rosenbrock, Tolerance, solve_ivp};
+    ///
+    /// // dy/dt = −k y with k = 1000 /s: J·dy = −k dy.
+    /// let k = 1000.0 * (one / s);
+    /// let rhs = |_t: Quantity<Time>, y: &Quantity<Dimensionless>| -> Quantity<Frequency> { -k * *y };
+    /// let jv = |_t: Quantity<Time>, _y: &Quantity<Dimensionless>, dy: &Quantity<Dimensionless>| -> Quantity<Frequency> { -k * *dy };
+    /// let method = Rosenbrock { jacobian: Jacobian::given(jv) };
+    /// let sol = solve_ivp(rhs, (0.0 * s)..(0.01 * s), 1.0 * one, method, Tolerance { rtol: 1e-8, atol: 1e-12 * one }).unwrap();
+    /// assert!((sol.y.value_in(one) - (-10.0f64).exp()).abs() < 1e-8);
+    /// ```
+    pub fn given<T, Y, R, J>(jv: J) -> GivenJacobian<J, T, Y, R>
+    where
+        J: FnMut(Quantity<T>, &Y, &Y) -> R,
+        Y: VectorSpace + PerDim<T>,
+        R: VectorSpace + JacobianReturns<<Y as PerDim<T>>::Out>,
+    {
+        GivenJacobian {
+            jv,
+            types: PhantomData,
+        }
+    }
+}
+
+/// A Jacobian given by the user, made by [`Jacobian::given`].
+pub struct GivenJacobian<J, T, Y, R> {
+    jv: J,
+    types: PhantomData<fn(Quantity<T>, Y) -> R>,
+}
+impl<J: Clone, T, Y, R> Clone for GivenJacobian<J, T, Y, R> {
+    fn clone(&self) -> Self {
+        GivenJacobian {
+            jv: self.jv.clone(),
+            types: PhantomData,
+        }
+    }
+}
+impl<J: Copy, T, Y, R> Copy for GivenJacobian<J, T, Y, R> {}
+impl<J, T, Y, R> fmt::Debug for GivenJacobian<J, T, Y, R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("GivenJacobian")
+    }
+}
+
+/// ERR-24: the `jacobian` of [`Rosenbrock`] must be [`Jacobian::Numerical`] or a
+/// [`Jacobian::given`] taking the time and state types of the solve.
+#[doc(hidden)]
+#[diagnostic::on_unimplemented(
+    message = "this Jacobian does not fit the solve: it takes other time or state types",
+    label = "wrong Jacobian for this solve",
+    note = "use `Jacobian::Numerical`, or `Jacobian::given(|t, y, dy| …)` with the time and state types of the right-hand side"
+)]
+pub trait JacobianFor<T, Y> {
+    /// Fills `out` (row-major, base units) with `∂f/∂y` at `(t, y)`; `false` means
+    /// that the solver uses central differences instead.
+    fn fill(&mut self, t: f64, y: &[f64], out: &mut [f64]) -> bool;
+}
+impl<T, Y> JacobianFor<T, Y> for Jacobian {
+    fn fill(&mut self, _: f64, _: &[f64], _: &mut [f64]) -> bool {
+        false
+    }
+}
+impl<J, T, Y, R> JacobianFor<T, Y> for GivenJacobian<J, T, Y, R>
+where
+    J: FnMut(Quantity<T>, &Y, &Y) -> R,
+    Y: VectorSpace,
+    R: VectorSpace,
+{
+    fn fill(&mut self, t: f64, y: &[f64], out: &mut [f64]) -> bool {
+        let n = Y::LEN;
+        let y = Y::from_components(|i| y[i]);
+        for j in 0..n {
+            // Column j is the product with the unit vector e_j.
+            let e = Y::from_components(|i| if i == j { 1.0 } else { 0.0 });
+            let col = (self.jv)(Quantity::from_base_components(t), &y, &e);
+            for i in 0..n {
+                out[i * n + j] = col.component(i);
+            }
+        }
+        true
+    }
+}
+
 /// An ODE method.
 pub trait Method: Copy {
+    #[doc(hidden)]
+    type Jac;
+    #[doc(hidden)]
+    fn jacobian(self) -> Self::Jac;
     #[doc(hidden)]
     fn kind(self) -> solver::OdeKind;
     #[doc(hidden)]
@@ -94,6 +198,10 @@ pub struct StepLimit<M> {
     pub max_steps: usize,
 }
 impl<M: Method> Method for StepLimit<M> {
+    type Jac = M::Jac;
+    fn jacobian(self) -> M::Jac {
+        self.method.jacobian()
+    }
     fn kind(self) -> solver::OdeKind {
         self.method.kind()
     }
@@ -102,16 +210,28 @@ impl<M: Method> Method for StepLimit<M> {
     }
 }
 impl Method for Rk4 {
+    type Jac = Jacobian;
+    fn jacobian(self) -> Jacobian {
+        Jacobian::Numerical
+    }
     fn kind(self) -> solver::OdeKind {
         solver::OdeKind::Rk4(self.h)
     }
 }
 impl Method for DormandPrince54 {
+    type Jac = Jacobian;
+    fn jacobian(self) -> Jacobian {
+        Jacobian::Numerical
+    }
     fn kind(self) -> solver::OdeKind {
         solver::OdeKind::Dopri5
     }
 }
-impl Method for Rosenbrock {
+impl<J: Copy> Method for Rosenbrock<J> {
+    type Jac = J;
+    fn jacobian(self) -> J {
+        self.jacobian
+    }
     fn kind(self) -> solver::OdeKind {
         solver::OdeKind::Rodas
     }
@@ -266,6 +386,16 @@ impl<T, Y: fmt::Debug> fmt::Debug for Solution<T, Y> {
     }
 }
 
+/// The Jacobian of `method` on plain arrays, as the solver calls it.
+fn given_jacobian<T, Y, M>(method: M) -> impl FnMut(f64, &[f64], &mut [f64]) -> bool
+where
+    M: Method,
+    M::Jac: JacobianFor<T, Y>,
+{
+    let mut jac = method.jacobian();
+    move |t, y, out| jac.fill(t, y, out)
+}
+
 /// Default largest number of steps (DD-13); change it with [`Method::max_steps`].
 pub const MAX_STEPS: usize = 100_000;
 
@@ -291,6 +421,7 @@ where
     R: VectorSpace + RhsReturns<<Y as PerDim<T>>::Out>,
     A: VectorSpace + ToleranceFor<Y>,
     M: Method,
+    M::Jac: JacobianFor<T, Y>,
 {
     solver::solve_ivp(
         f,
@@ -298,6 +429,7 @@ where
         y0,
         method.kind(),
         method.step_limit(),
+        &mut given_jacobian::<T, Y, M>(method),
         tol.rtol,
         &tol.atol,
         &mut |_, _| {},
@@ -321,6 +453,7 @@ where
     R: VectorSpace + RhsReturns<<Y as PerDim<T>>::Out>,
     A: VectorSpace + ToleranceFor<Y>,
     M: Method,
+    M::Jac: JacobianFor<T, Y>,
     O: FnMut(Quantity<T>, &Y),
 {
     solver::solve_ivp(
@@ -329,6 +462,7 @@ where
         y0,
         method.kind(),
         method.step_limit(),
+        &mut given_jacobian::<T, Y, M>(method),
         tol.rtol,
         &tol.atol,
         &mut on_step,
@@ -521,6 +655,7 @@ where
     R: VectorSpace + RhsReturns<<Y as PerDim<T>>::Out>,
     A: VectorSpace + ToleranceFor<Y>,
     M: Method,
+    M::Jac: JacobianFor<T, Y>,
     G: FnMut(Quantity<T>, &Y) -> Quantity<D>,
 {
     solve_ivp_events_with(f, span, y0, method, tol, event, |_, _| {})
@@ -543,6 +678,7 @@ where
     R: VectorSpace + RhsReturns<<Y as PerDim<T>>::Out>,
     A: VectorSpace + ToleranceFor<Y>,
     M: Method,
+    M::Jac: JacobianFor<T, Y>,
     G: FnMut(Quantity<T>, &Y) -> Quantity<D>,
     O: FnMut(Quantity<T>, &Y),
 {
@@ -556,6 +692,7 @@ where
         y0,
         method.kind(),
         method.step_limit(),
+        &mut given_jacobian::<T, Y, M>(method),
         tol.rtol,
         &tol.atol,
         &mut on_step,

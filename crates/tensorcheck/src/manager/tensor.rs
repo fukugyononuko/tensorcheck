@@ -22,9 +22,9 @@ use crate::engine::index::{
 use crate::engine::index::{Here, There};
 use crate::engine::metric::{Metric, inverse_at, inverse_into, metric_at, metric_into};
 use crate::engine::symmetry::{Antisymmetric, NoSym, Symmetric};
-use crate::utility::diagnostics::RhsReturns;
 use crate::utility::diagnostics::{ComponentDimIs, SameSlot, SqrtAllowed};
 use crate::utility::diagnostics::{CoordOf, IsTensor, LabelCount, MetricOn, VarianceIs};
+use crate::utility::diagnostics::{JacobianReturns, RhsReturns};
 use crate::utility::diagnostics::{SameDimension, SameKind, SameSlots, SameSymmetry, UnitMatches};
 use crate::utility::linear::LinearError;
 use crate::utility::scalar::Scalar;
@@ -953,3 +953,20 @@ rhs_tuple!(R0 T0, R1 T1, R2 T2);
 rhs_tuple!(R0 T0, R1 T1, R2 T2, R3 T3);
 rhs_tuple!(R0 T0, R1 T1, R2 T2, R3 T3, R4 T4);
 rhs_tuple!(R0 T0, R1 T1, R2 T2, R3 T3, R4 T4, R5 T5);
+
+/// A Jacobian given to an ODE solver returns `J·dy` with the type that the
+/// right-hand side may return (ERR-23).
+impl<D, S: Slots, Sym1, Sym2, K1, K2> JacobianReturns<Tensor<D, S, Sym2, K2, f64>>
+    for Tensor<D, S, Sym1, K1, f64>
+{
+}
+macro_rules! jacobian_tuple {
+    ($($r:ident $t:ident),+) => {
+        impl<$($r: JacobianReturns<$t>, $t),+> JacobianReturns<($($t,)+)> for ($($r,)+) {}
+    };
+}
+jacobian_tuple!(R0 T0, R1 T1);
+jacobian_tuple!(R0 T0, R1 T1, R2 T2);
+jacobian_tuple!(R0 T0, R1 T1, R2 T2, R3 T3);
+jacobian_tuple!(R0 T0, R1 T1, R2 T2, R3 T3, R4 T4);
+jacobian_tuple!(R0 T0, R1 T1, R2 T2, R3 T3, R4 T4, R5 T5);

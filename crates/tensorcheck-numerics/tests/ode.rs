@@ -237,7 +237,7 @@ fn failures_carry_the_time() {
 
 // TC-U27 (issue #22): the step limit set with `Method::max_steps`. Steps of 0.25 s
 // are exact in binary, so four of them end exactly at 1 s.
-fn decay_until_1s<M: Method>(
+fn decay_until_1s<M: Method<Jac = Jacobian>>(
     method: M,
     calls: &std::cell::Cell<usize>,
 ) -> Result<tensorcheck_numerics::ode::Solution<Time, Quantity<D0>>, SolveError<Time>> {
@@ -314,7 +314,7 @@ fn step_limit_can_be_changed() {
 
 type OscState = (Quantity<Length>, Quantity<Velocity>);
 
-fn oscillator_for_10s<M: Method>(
+fn oscillator_for_10s<M: Method<Jac = Jacobian>>(
     method: M,
 ) -> Result<tensorcheck_numerics::ode::Solution<Time, OscState>, SolveError<Time>> {
     let y0 = (1.0 * m, 0.0 * (m / s));
@@ -328,7 +328,7 @@ fn oscillator_for_10s<M: Method>(
 #[test]
 fn step_limit_counts_rejected_steps_of_adaptive_methods() {
     // Returns the rejected steps, so the caller can see that they were counted.
-    fn check<M: Method>(method: M) -> usize {
+    fn check<M: Method<Jac = Jacobian>>(method: M) -> usize {
         let st = oscillator_for_10s(method.max_steps(usize::MAX))
             .unwrap()
             .stats;

@@ -219,3 +219,14 @@ impl<R> RhsReturns<Decoy<R>> for R {}
 // Implemented in the tensor manager for tensors (same dimension and slots; any
 // symmetry and tensoriality, since the coordinate derivative of components is not
 // a tensor in general) and element-wise for tuples.
+
+/// ERR-23: a Jacobian given to the Rosenbrock method returns `J·dy`, which has the
+/// type of the right-hand side.
+#[diagnostic::on_unimplemented(
+    message = "the Jacobian must return J·dy with the type of the right-hand side",
+    label = "wrong return type for J·dy",
+    note = "`Jacobian::given(|t, y, dy| …)` returns the sum over j of ∂f/∂y_j · dy_j, whose dimension is [y]/[t]"
+)]
+pub trait JacobianReturns<R> {}
+impl<R> JacobianReturns<Decoy<R>> for R {}
+// Implemented in the tensor manager like `RhsReturns`.

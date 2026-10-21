@@ -27,7 +27,11 @@ fn position(_t: Quantity<Time>, y: &Osc) -> Quantity<Length> {
 }
 
 /// The events of `event` on the oscillator up to 8 s, as (t, x, v) in s, m, m/s.
-fn oscillator_events<M: Method, G>(method: M, rtol: f64, event: Event<G>) -> Vec<(f64, f64, f64)>
+fn oscillator_events<M: Method<Jac = Jacobian>, G>(
+    method: M,
+    rtol: f64,
+    event: Event<G>,
+) -> Vec<(f64, f64, f64)>
 where
     G: FnMut(Quantity<Time>, &Osc) -> Quantity<Length>,
 {
@@ -96,7 +100,7 @@ fn rk4_event_times_are_fourth_order() {
 
 #[test]
 fn direction_selects_the_crossings() {
-    fn check<M: Method>(name: &str, method: M) {
+    fn check<M: Method<Jac = Jacobian>>(name: &str, method: M) {
         let times = |event| -> Vec<f64> {
             let ev = oscillator_events(method, 1e-9, event);
             ev.iter().map(|e| e.0).collect()
@@ -121,7 +125,7 @@ fn direction_selects_the_crossings() {
 
 #[test]
 fn terminal_event_stops_the_solve() {
-    fn check<M: Method>(name: &str, method: M) {
+    fn check<M: Method<Jac = Jacobian>>(name: &str, method: M) {
         let tol = Tolerance {
             rtol: 1e-9,
             atol: (1e-9 * m, 1e-9 * (m / s)),
@@ -313,7 +317,7 @@ fn rk4_evaluates_f_once_more_only_in_a_step_with_an_event() {
 #[test]
 fn adaptive_methods_evaluate_f_no_more_with_events() {
     // Dormand–Prince and RODAS already have f at the end of the step.
-    fn check<M: Method>(name: &str, method: M) {
+    fn check<M: Method<Jac = Jacobian>>(name: &str, method: M) {
         let tol = Tolerance {
             rtol: 1e-9,
             atol: (1e-9 * m, 1e-9 * (m / s)),

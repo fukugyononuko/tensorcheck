@@ -161,7 +161,7 @@ fn quadrature_rejects_unsupported_counts_and_ranges() {
 }
 
 /// The harmonic oscillator, counting right-hand-side and `on_step` calls.
-fn ode<M: tensorcheck_numerics::ode::Method>(
+fn ode<M: tensorcheck_numerics::ode::Method<Jac = Jacobian>>(
     method: M,
     span: core::ops::Range<Quantity<Time>>,
     y0: State,
