@@ -428,7 +428,7 @@ pub trait RawVec: Copy {                                 // E05〜E08 が使う�
 - 利用者が与える Jacobi 行列（FR-30、API-60、issue #23）：行列ではなく、積 $`J(t, y)\,dy`$ を返す関数として受け取る。
   - この形にした理由：状態は組や点を含み、成分ごとに次元が違う。成分 $`(i, j)`$ ごとに次元の違う行列の型はない。積の形なら、成分 $`i`$ の和 $`\sum_j J_{ij}\,dy_j`$ の各項の次元は $`[f_i]`$ でなければ足せず（ERR-01）、和の型は右辺の型でなければならない（ERR-23）。したがって、すべての $`(i, j)`$ で $`[J_{ij}] = [f_i]/[y_j]`$ が型で確かめられる。
   - 行列の作り方：各歩の始めの $`(t, y)`$ で、状態の基準の単位での単位ベクトル $`e_j`$ との積を 1 回ずつ求め、列 $`j`$ にする（$`n`$ 回の呼び出し。中心差分は $`f`$ を $`2n`$ 回呼ぶ）。関数は $`dy`$ について線形でなければならない（検査はしない）。
-  - 型の検査：`Jacobian::given` が戻り値の型を（ERR-23）、`solve_ivp` などが時間と状態の型の一致を（`M::Jac: JacobianFor<T, Y>`、ERR-24）確かめる。`Method` に関連型 `Jac` を足し、`Rosenbrock` を `Rosenbrock<J = Jacobian>` にした。既定の型引数により、`Rosenbrock { jacobian: Jacobian::Numerical }` はそのまま書ける。一方、`M: Method` で総称に書いた関数から `solve_ivp` を呼ぶには、上の制約を足す必要がある（互換性の変化）。実行時に成分の数だけを比べる形も考えたが、型の違う関数が黙って使われ、次元の検査が途切れるので採らなかった。
+  - 型の検査：`Jacobian::given` が戻り値の型を（ERR-23）、`solve_ivp` などが時間と状態の型の一致を（`M::Jac: JacobianFor<T, Y>`、ERR-24）確かめる。`JacobianFor` は公開の制約に現れるので公開するが、非公開の親 trait（`Sealed`）で封印し、実装を `Jacobian` と `GivenJacobian` だけにする。外で実装できると、数値の行列を直接渡して型の検査を通らずに済んでしまうため（PR #52 のレビュー）。`Method` に関連型 `Jac` を足し、`Rosenbrock` を `Rosenbrock<J = Jacobian>` にした。既定の型引数により、`Rosenbrock { jacobian: Jacobian::Numerical }` はそのまま書ける。一方、`M: Method` で総称に書いた関数から `solve_ivp` を呼ぶには、上の制約を足す必要がある（互換性の変化）。実行時に成分の数だけを比べる形も考えたが、型の違う関数が黙って使われ、次元の検査が途切れるので採らなかった。
   - 有限でない成分を含む行列は `NonFinite`（その歩の始めの時刻）にする。そのまま LU 分解に渡すと `Singular` になり、原因がわからないため。
 
 ## 3.16 DD-16 エラー文の実装（U03）
@@ -459,7 +459,7 @@ ERR ごとに専用の trait を 1 つ置き、`#[diagnostic::on_unimplemented]`
 | ERR-22 | `SqrtAllowed` | 次元の指数がすべて偶数（`DimSqrt::Allowed` が `True`） |
 | ERR-20 | `VarianceIs<V, P>` | 指定した枠の上下が、`raise` なら下、`lower` なら上 |
 | ERR-23 | `JacobianReturns<R>` | `Jacobian::given` の関数の戻り値の型が、右辺に許される型（ERR-14 と同じ規則） |
-| ERR-24 | `JacobianFor<T, Y>` | `Jacobian`（数値微分）、または時間と状態の型が `T`・`Y` の `GivenJacobian` |
+| ERR-24 | `JacobianFor<T, Y>`（親の `Sealed` にも同じ文） | `Jacobian`（数値微分）、または時間と状態の型が `T`・`Y` の `GivenJacobian`。`Sealed` はこの 2 つだけに実装する |
 
 - 実装での補足（フェーズ 1）：見出しを確実に出すには、次のどちらかが要る。
   - **おとりの実装**：`impl<D> SameDimension<D> for D` のように実装が 1 つだけだと、コンパイラはそれを使ってもう一方の型を推論してしまい、「型が合わない」（E0308）という別のエラーになる。決して使われない型 `Decoy<T>` への実装を 1 つ足すと、推論が先に決まらず、見出しのとおりのエラーになる。

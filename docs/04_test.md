@@ -108,6 +108,7 @@
 | TC-F24 | `Jacobian::given` の関数が `dy` そのもの（$`[y]`$）を返す | ERR-23 |
 | TC-F25 | 速度の状態の `Jacobian::given` を、長さの状態の `solve_ivp` に渡す | ERR-24 |
 | TC-F26 | 状態 $`(x, v)`$ の積 $`J\,dy`$ で、$`\partial \dot v/\partial x`$ の次元を $`\mathrm{s^{-1}}`$ と誤る | ERR-01、続けて ERR-23 |
+| TC-F27 | `JacobianFor` を外で実装し、数値の行列を `Rosenbrock` に渡す（PR #52 のレビュー） | ERR-24 |
 
 - 見出しの文言は、実装したときに実際の出力を見て調整し、2a §2a.4 も直す。
 - 見出しを比べるので、Rust の版を上げたとき（`rust-toolchain.toml` の更新）に見出しが変わったら、ここで気づける。見出し以外の行の変化では失敗しない。

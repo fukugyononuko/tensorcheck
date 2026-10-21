@@ -1,5 +1,5 @@
 // TC-F25 / ERR-24: the Jacobian is written for a velocity, the solve's state is a length.
-// expect: error[E0277]: this Jacobian does not fit the solve: it takes other time or state types
+// expect: error[E0277]: this is not a Jacobian for this solve
 use tensorcheck::Quantity;
 use tensorcheck::units::si::{Acceleration, Length, Time, Velocity, m, s};
 use tensorcheck_numerics::ode::{Jacobian, Rosenbrock, Tolerance, solve_ivp};

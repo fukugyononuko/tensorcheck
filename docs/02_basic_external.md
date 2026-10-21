@@ -253,7 +253,7 @@ impl Metric for SphereMetric {
 | ERR-21 | `from_parts` の成分の次元が、座標系から決まる次元と違う | `` component `{P}` has the wrong dimension for this vector `` | `` component a of a vector with dimension [V] has dimension [V]·[x^a]/[X] `` | M01 |
 | ERR-22 | 指数に奇数のある次元の平方根（例：長さの平方根） | `cannot take the square root: the dimension has an odd exponent` | `every base-dimension exponent must be even, e.g. m^2 or m^2/s^2` | E01 |
 | ERR-23 | `Jacobian::given` の関数の戻り値の型が右辺の型（状態 ÷ 時間）でない | `the Jacobian must return J·dy with the type of the right-hand side` | `` `Jacobian::given(\|t, y, dy\| …)` returns the sum over j of ∂f/∂y_j · dy_j, whose dimension is [y]/[t] `` | M02 |
-| ERR-24 | `Rosenbrock` の `jacobian` の時間・状態の型が、解く問題と違う | `this Jacobian does not fit the solve: it takes other time or state types` | `` use `Jacobian::Numerical`, or `Jacobian::given(\|t, y, dy\| …)` with the time and state types of the right-hand side `` | M02 |
+| ERR-24 | `Rosenbrock` の `jacobian` が、`Jacobian::Numerical` でも、解く問題の時間・状態の型の `Jacobian::given` でもない（型の違う `Jacobian::given`、ソルバーの trait を外で実装した型） | `this is not a Jacobian for this solve` | `` use `Jacobian::Numerical`, or `Jacobian::given(\|t, y, dy\| …)` with the time and state types of the right-hand side `` | M02 |
 
 - 見出しの文言は実装時に、04 のコンパイル失敗のテスト（TC-F）で実際の出力を確かめて調整する。調整したらこの表も直す。
 - ERR-16 の見出しには、変換しようとした型の名前を入れない（issue #36）。判定する trait はテンソル性の印（`Tensorial`・`ChartBound`）に対して働くので、型の名前を入れるにはテンソルの型を渡す必要がある。試したところ、見出しが `` `Tensor<Dim<Si, Cons<Pos<S<Z>>, …>` is not a tensor … `` のように内部の型の表現になり、読めなかった（NFR-05）。どこが誤りかは、見出しの下の位置の表示（`transform` の呼び出し）でわかる。

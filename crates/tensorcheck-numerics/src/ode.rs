@@ -113,15 +113,29 @@ impl<J, T, Y, R> fmt::Debug for GivenJacobian<J, T, Y, R> {
     }
 }
 
+mod sealed {
+    /// ERR-24: only the Jacobians of this crate, whose dimensions are checked, can
+    /// be used; a matrix filled outside would skip the checks (PR #52 review).
+    #[diagnostic::on_unimplemented(
+        message = "this is not a Jacobian for this solve",
+        label = "not `Jacobian::Numerical` or `Jacobian::given`",
+        note = "use `Jacobian::Numerical`, or `Jacobian::given(|t, y, dy| …)` with the time and state types of the right-hand side"
+    )]
+    pub trait Sealed {}
+}
+impl sealed::Sealed for Jacobian {}
+impl<J, T, Y, R> sealed::Sealed for GivenJacobian<J, T, Y, R> {}
+
 /// ERR-24: the `jacobian` of [`Rosenbrock`] must be [`Jacobian::Numerical`] or a
-/// [`Jacobian::given`] taking the time and state types of the solve.
+/// [`Jacobian::given`] taking the time and state types of the solve. Sealed: it is
+/// implemented only for those two.
 #[doc(hidden)]
 #[diagnostic::on_unimplemented(
-    message = "this Jacobian does not fit the solve: it takes other time or state types",
-    label = "wrong Jacobian for this solve",
+    message = "this is not a Jacobian for this solve",
+    label = "not `Jacobian::Numerical` or a `Jacobian::given` for this time and state",
     note = "use `Jacobian::Numerical`, or `Jacobian::given(|t, y, dy| …)` with the time and state types of the right-hand side"
 )]
-pub trait JacobianFor<T, Y> {
+pub trait JacobianFor<T, Y>: sealed::Sealed {
     /// Fills `out` (row-major, base units) with `∂f/∂y` at `(t, y)`; `false` means
     /// that the solver uses central differences instead.
     fn fill(&mut self, t: f64, y: &[f64], out: &mut [f64]) -> bool;
