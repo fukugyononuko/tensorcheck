@@ -105,7 +105,7 @@ Contraction plans are computed at compile time for each combination of types, so
 - Symmetry markers are for rank-2 tensors only; Riemann symmetries are not encoded in the type.
 - Connections are Levi-Civita in a coordinate basis (no torsion, no orthonormal frames yet).
 - `transform` needs every index in the source chart.
-- The Rosenbrock solver uses a numerical Jacobian; user-supplied Jacobians are planned.
+- The Rosenbrock solver takes a numerical Jacobian, or one you give as the product `J·dy` (`Jacobian::given`; the dimension of each entry is checked where the product is written with quantities, not for a `Point` state, whose coordinates are read as numbers); `∂f/∂t` is always found numerically.
 - Event detection takes one condition per solve, and misses two sign changes within one step.
 - Event functions must be continuous along the solution; for a discontinuous `g`, an event may be reported where `g` is not zero (see the documentation of `Event`).
 - Requires `std` (no `no_std` yet).

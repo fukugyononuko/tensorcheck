@@ -87,7 +87,8 @@
 | API-40 | `ode::solve_ivp(f, t0..t1, y0, method, tol)` | 1 階の常微分方程式 $`dy/dt = f(t, y)`$ を解く。`f` の戻り値の型は `<Y as VectorSpace>::Per<T>`（$`y`$ ÷ $`[t]`$） |
 | API-41 | （廃止）`ode::solve_second_order` | 2 階の方程式は、状態を $`(x, \dot{x})`$ の組にして `solve_ivp` で解く。シンプレクティック法は将来（FR-29） |
 | API-57 | `DormandPrince54.max_steps(1_000_000)` | どの解法にも使える。歩数の上限を既定の `ode::MAX_STEPS`（100,000）から変える。適応型の解法では棄却した歩も数える。上限に届いたら `MaxSteps`（届いた時刻つき）。`0` なら始点で `MaxSteps`（`f` を呼ばない） |
-| API-42 | `ode::{Rk4 { h }, DormandPrince54, Rosenbrock { jacobian: Jacobian::Numerical }}` | 解法。`Rosenbrock` は RODAS（Hairer & Wanner）。Jacobi 行列は数値微分（利用者が与える形は将来、FR-30） |
+| API-42 | `ode::{Rk4 { h }, DormandPrince54, Rosenbrock { jacobian: Jacobian::Numerical }}` | 解法。`Rosenbrock` は RODAS（Hairer & Wanner）。Jacobi 行列は数値微分か、利用者が与える形（API-60） |
+| API-60 | `Rosenbrock { jacobian: Jacobian::given(\|t, y, dy\| …) }` | 利用者が与える Jacobi 行列（FR-30）。関数は積 $`J(t, y)\,dy = \sum_j (\partial f/\partial y_j)\,dy_j`$ を返す。`dy` は状態と同じ型、戻り値は右辺と同じ型（ERR-23）。`dy` の成分を量のまま使って書いた項は、成分 $`(i, j)`$ の次元が $`[f_i]/[y_j]`$ でなければ和に足せない（ERR-01、ERR-21）。検査が成り立つ範囲は API の文書に書く。時間と状態の型が解く問題と違えば ERR-24。条件と失敗は API の文書（`Jacobian::given`）に書く。`Rosenbrock` は `Rosenbrock<J = Jacobian>` になり、`M: Method` で総称に書いた関数から `solve_ivp` を呼ぶには `M::Jac: JacobianFor<T, Y>`（数値微分だけなら `M: Method<Jac = Jacobian>`）の制約が要る。`Method` は `Copy` を求めない（状態を持つ `FnMut` を渡せるようにするため）ので、総称のコードで同じ解法を 2 回使うなら `M: Copy` も足す |
 | API-43 | `ode::Tolerance { rtol, atol }` | 許容値。`rtol` は無次元の数、`atol` は状態と同じ型。どちらも有限で 0 以上、成分ごとに少なくとも一方が正（DD-13） |
 | API-44 | `ode::Solution { t, y, stats }`、`ode::SolveError` | 解と、失敗（`MaxSteps`、`StepTooSmall`、`NonFinite`、`Singular`、入力の誤り `InvalidTolerance`・`InvalidStep`・`InvalidSpan`）。`e.time()` で失敗した時刻を取り出せる（入力の誤りでは `None`） |
 | API-45 | `ode::solve_ivp_with(f, ..., on_step)` | 受け入れた各歩で呼ばれる関数を渡す（途中の値を記録するため） |
@@ -148,6 +149,10 @@ use tensorcheck_numerics::ode::{solve_ivp, Rosenbrock, Jacobian, Tolerance};
 
 let sol = solve_ivp(rhs, t0..t1, y0, Rosenbrock { jacobian: Jacobian::Numerical },
                     Tolerance { rtol: 1e-6, atol: atol_like_y })?;
+// Or give the Jacobian as J·dy (API-60): for the state (x, v) with x'' = −k x − c v,
+let jv = |_t: Quantity<Time>, _y: &Osc, dy: &Osc| (dy.1, -(k * dy.0) - c * dy.1);
+let sol = solve_ivp(rhs, t0..t1, y0, Rosenbrock { jacobian: Jacobian::given(jv) }, tol)?;
+// writing c * dy.0 (dimension m/s instead of m/s²) does not compile (ERR-01, ERR-23)
 ```
 
 UC-08（定積分）：
@@ -247,11 +252,13 @@ impl Metric for SphereMetric {
 | ERR-20 | `raise` で上付きの添字を、`lower` で下付きの添字を指定した | `` the index at slot `{P}` is already {Self} `` | `` `raise` applies to a lower index and `lower` to an upper index `` | M01 |
 | ERR-21 | `from_parts` の成分の次元が、座標系から決まる次元と違う | `` component `{P}` has the wrong dimension for this vector `` | `` component a of a vector with dimension [V] has dimension [V]·[x^a]/[X] `` | M01 |
 | ERR-22 | 指数に奇数のある次元の平方根（例：長さの平方根） | `cannot take the square root: the dimension has an odd exponent` | `every base-dimension exponent must be even, e.g. m^2 or m^2/s^2` | E01 |
+| ERR-23 | `Jacobian::given` の関数の戻り値の型が右辺の型（状態 ÷ 時間）でない | `the Jacobian must return J·dy with the type of the right-hand side` | `` `Jacobian::given(\|t, y, dy\| …)` returns the sum over j of ∂f/∂y_j · dy_j, whose dimension is [y]/[t] `` | M02 |
+| ERR-24 | `Rosenbrock` の `jacobian` が、`Jacobian::Numerical` でも、解く問題の時間・状態の型の `Jacobian::given` でもない（型の違う `Jacobian::given`、ソルバーの trait を外で実装した型） | `this is not a Jacobian for this solve` | `` use `Jacobian::Numerical`, or `Jacobian::given(\|t, y, dy\| …)` with the time and state types of the right-hand side `` | M02 |
 
 - 見出しの文言は実装時に、04 のコンパイル失敗のテスト（TC-F）で実際の出力を確かめて調整する。調整したらこの表も直す。
 - ERR-16 の見出しには、変換しようとした型の名前を入れない（issue #36）。判定する trait はテンソル性の印（`Tensorial`・`ChartBound`）に対して働くので、型の名前を入れるにはテンソルの型を渡す必要がある。試したところ、見出しが `` `Tensor<Dim<Si, Cons<Pos<S<Z>>, …>` is not a tensor … `` のように内部の型の表現になり、読めなかった（NFR-05）。どこが誤りかは、見出しの下の位置の表示（`transform` の呼び出し）でわかる。
 - 表の `{…}` は差し込まれる名前の説明で、コードでの書き方（`{Self}` など）とは違うことがある。出力される文は同じ。issue #36 で、ERR-01〜ERR-22 の見出しと補足のすべてをコードと照らし、ERR-16 の見出しと、ERR-09・ERR-10・ERR-15 の補足（表では `—` だった）を実装に合わせた。
-- 判定する構成要素が M02 の誤り（ERR-14、ERR-15）は、M02 の公開する関数の型の制約として表す。
+- 判定する構成要素が M02 の誤り（ERR-14、ERR-15、ERR-23、ERR-24）は、M02 の公開する関数の型の制約として表す。ERR-23 は `Jacobian::given` の制約、ERR-24 は `solve_ivp` などの制約 `M::Jac: JacobianFor<T, Y>`。成分の次元の誤りは、和を作る足し算で ERR-01 になり、続けて ERR-23 も出る（issue #23 で実際の出力を確かめた）。
 - ERR-18 は、trait のメソッドの形の誤りなので、コンパイラ自身のエラーになり、見出しを差し替えられない。NFR-05 の例外として扱い、ドキュメントで補う。
 
 ## 2a.5 外部から利用するもの（USE）

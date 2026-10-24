@@ -57,6 +57,7 @@ flowchart LR
 | FR-21 数値微分 | UC-07 | 初期 |
 | FR-22 誤差の許容値と失敗の知らせ | UC-07, UC-08 | 初期 |
 | FR-31 イベント検出 | UC-07 | 初期 |
+| FR-30 利用者が与える Jacobi 行列 | UC-07 | 初期 |
 | FR-23 陰的解法（Radau IIA・BDF） | — | 将来 |
 | FR-24 無限区間・多次元の積分 | — | 将来 |
 | FR-25 テンソル場 | UC-09 | 初期 |
@@ -64,7 +65,6 @@ flowchart LR
 | FR-27 曲率 | UC-09 | 初期 |
 | FR-28 ほかの数値型 | — | 将来 |
 | FR-29 シンプレクティック法 | — | 将来 |
-| FR-30 利用者が与える Jacobi 行列 | — | 将来 |
 
 ## T.3 変動性 → 構成要素
 
@@ -112,6 +112,7 @@ flowchart LR
 | FR-21 数値微分 | CMP-M02, CMP-E08 |
 | FR-22 誤差の許容値と失敗の知らせ | CMP-M02, CMP-E06 |
 | FR-31 イベント検出 | CMP-M02, CMP-E05 |
+| FR-30 利用者が与える Jacobi 行列 | CMP-M02, CMP-E05 |
 | FR-23 陰的解法（Radau IIA・BDF） | CMP-E05, CMP-U04（将来） |
 | FR-24 無限区間・多次元の積分 | CMP-E07（将来） |
 | FR-25 テンソル場 | CMP-M03, CMP-E08 |
@@ -119,7 +120,6 @@ flowchart LR
 | FR-27 曲率 | CMP-M03, CMP-E02, CMP-E03, CMP-E04, CMP-E08, CMP-E09 |
 | FR-28 ほかの数値型 | CMP-U02（将来） |
 | FR-29 シンプレクティック法 | CMP-E05（将来） |
-| FR-30 利用者が与える Jacobi 行列 | CMP-M02, CMP-E05（将来） |
 | NFR-01 stable・std・依存なし | すべて（01 §1.8） |
 | NFR-03 型の情報は実行時の大きさを持たない | CMP-U01, CMP-A01 |
 | NFR-05 エラー文は見出しでわかる | CMP-U03 |
@@ -160,13 +160,13 @@ flowchart LR
 | 構成要素 | 変動性 | 要件 | CC |
 | --- | --- | --- | --- |
 | CMP-M01 TensorManager | VOL-13 | FR-01, FR-03, FR-06〜FR-12 | CC-01〜CC-05 |
-| CMP-M02 SolverManager | VOL-13 | FR-18〜FR-22, FR-31 | CC-07, CC-08 |
+| CMP-M02 SolverManager | VOL-13 | FR-18〜FR-22, FR-30, FR-31 | CC-07, CC-08 |
 | CMP-M03 GeometryManager | VOL-13 | FR-15, FR-25〜FR-27 | CC-09 |
 | CMP-E01 DimensionEngine | VOL-01, VOL-02 | FR-01〜FR-03, FR-06, FR-08, FR-12 | CC-01〜CC-03, CC-05, CC-09 |
 | CMP-E02 IndexEngine | VOL-03, VOL-04 | FR-04〜FR-09, FR-11, FR-12, FR-15, FR-26, FR-27 | CC-02〜CC-05, CC-09 |
 | CMP-E03 MetricEngine | VOL-05 | FR-09, FR-26, FR-27 | CC-02, CC-03, CC-09 |
 | CMP-E04 SymmetryEngine | VOL-06 | FR-08, FR-10, FR-27 | CC-03〜CC-05, CC-09 |
-| CMP-E05 OdeStepEngine | VOL-07 | FR-18, FR-19, FR-23, FR-31 | CC-07 |
+| CMP-E05 OdeStepEngine | VOL-07 | FR-18, FR-19, FR-23, FR-30, FR-31 | CC-07 |
 | CMP-E06 ErrorControlEngine | VOL-08 | FR-18〜FR-20, FR-22 | CC-07, CC-08 |
 | CMP-E07 QuadratureEngine | VOL-09 | FR-20, FR-24 | CC-08 |
 | CMP-E08 DifferentiationEngine | VOL-10 | FR-15, FR-16, FR-19, FR-21, FR-25〜FR-27 | CC-07, CC-09 |
@@ -194,7 +194,7 @@ flowchart LR
 | FR-10 対称性 | API-04, API-22, API-33, API-37 | — | ERR-12, ERR-13 |
 | FR-11 座標系の変換 | API-11, API-32 | EXT-05 | ERR-10, ERR-16 |
 | FR-12 成分の取り出し | API-24 | — | ERR-11 |
-| FR-13 エラー文 | — | — | ERR-01〜ERR-22 |
+| FR-13 エラー文 | — | — | ERR-01〜ERR-24 |
 | FR-14 例題 | §2a.2 の使い方の例 | — | — |
 | FR-15 共変微分 | API-16, API-54 | EXT-08 | ERR-17 |
 | FR-16 自動微分の数値の型 | API-17 | EXT-06, EXT-08 | ERR-18 |
@@ -204,11 +204,12 @@ flowchart LR
 | FR-21 数値微分 | API-15, API-49 | EXT-07 | — |
 | FR-22 誤差の許容値と失敗の知らせ | API-43, API-44, API-47, API-48, API-57 | — | ERR-15 |
 | FR-31 イベント検出 | API-58, API-59 | — | ERR-14, ERR-15 |
+| FR-30 利用者が与える Jacobi 行列 | API-42, API-60 | — | ERR-01, ERR-21, ERR-23, ERR-24 |
 | FR-25 テンソル場 | API-55 | EXT-08 | ERR-18 |
 | FR-26 Christoffel 記号 | API-16, API-50, API-51, API-53 | EXT-06 | ERR-16, ERR-17, ERR-19 |
 | FR-27 曲率 | API-16, API-52, API-53 | EXT-06 | — |
 
-将来の FR（FR-17、FR-23、FR-24、FR-28、FR-29、FR-30）は、外部インターフェースをまだ持たない。API-41 は廃止。
+将来の FR（FR-17、FR-23、FR-24、FR-28、FR-29）は、外部インターフェースをまだ持たない。API-41 は廃止。
 
 ## T.10 詳細設計 → 構成要素・要件
 
@@ -228,7 +229,7 @@ flowchart LR
 | DD-12 常微分方程式の解法 | CMP-E05, CMP-M02 | FR-18, FR-19, FR-31 |
 | DD-13 誤差の測り方と刻み幅の調整 | CMP-E06 | FR-18, FR-20, FR-22 |
 | DD-14 定積分 | CMP-E07, CMP-M02 | FR-20 |
-| DD-15 差分による数値微分 | CMP-E08 | FR-19, FR-21 |
+| DD-15 差分による数値微分 | CMP-E08 | FR-19, FR-21, FR-30 |
 | DD-16 エラー文の実装 | CMP-U03 | FR-13, NFR-05, NFR-08 |
 | DD-17 失敗の型 | CMP-M02, CMP-U04 | FR-22 |
 | DD-18 利用者向けのマクロ | C01 向け | FR-02, FR-04, FR-05 |
@@ -251,7 +252,7 @@ flowchart LR
 | FR-10 対称性 | TC-U06, TC-F12, TC-F13 |
 | FR-11 座標系の変換 | TC-U08, TC-I04, TC-F10, TC-R04 |
 | FR-12 成分の取り出し | TC-U05, TC-F11 |
-| FR-13 エラー文 | TC-F01〜TC-F18, TC-F20〜TC-F23 |
+| FR-13 エラー文 | TC-F01〜TC-F18, TC-F20〜TC-F28 |
 | FR-14 例題 | TC-E01〜TC-E11 |
 | FR-15 共変微分 | TC-U12 |
 | FR-16 自動微分の数値の型 | TC-U09, TC-F18 |
@@ -261,6 +262,7 @@ flowchart LR
 | FR-21 数値微分 | TC-U26 |
 | FR-22 誤差の許容値と失敗の知らせ | TC-U20, TC-U27, TC-U28 |
 | FR-31 イベント検出 | TC-U29, TC-E10 |
+| FR-30 利用者が与える Jacobi 行列 | TC-U30, TC-F24, TC-F25, TC-F26, TC-F27, TC-F28, TC-E05 |
 | FR-25 テンソル場 | TC-U12 |
 | FR-26 Christoffel 記号 | TC-U10, TC-U14, TC-F16, TC-F17, TC-F20 |
 | FR-27 曲率 | TC-U11, TC-U14, TC-U15, TC-U16, TC-I08, TC-E07 |
