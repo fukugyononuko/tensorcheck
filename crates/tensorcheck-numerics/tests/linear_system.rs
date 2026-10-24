@@ -201,8 +201,8 @@ impl VectorSpace for Big {
     fn component(&self, i: usize) -> f64 {
         self.0[i]
     }
-    fn from_components(mut f: impl FnMut(usize) -> f64) -> Self {
-        Big(core::array::from_fn(|i| f(i)))
+    fn from_components(f: impl FnMut(usize) -> f64) -> Self {
+        Big(core::array::from_fn(f))
     }
 }
 impl PerDim<Time> for Big {
