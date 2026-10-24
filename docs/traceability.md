@@ -204,7 +204,7 @@ flowchart LR
 | FR-21 数値微分 | API-15, API-49 | EXT-07 | — |
 | FR-22 誤差の許容値と失敗の知らせ | API-43, API-44, API-47, API-48, API-57 | — | ERR-15 |
 | FR-31 イベント検出 | API-58, API-59 | — | ERR-14, ERR-15 |
-| FR-30 利用者が与える Jacobi 行列 | API-42, API-60 | — | ERR-01, ERR-23, ERR-24 |
+| FR-30 利用者が与える Jacobi 行列 | API-42, API-60 | — | ERR-01, ERR-21, ERR-23, ERR-24 |
 | FR-25 テンソル場 | API-55 | EXT-08 | ERR-18 |
 | FR-26 Christoffel 記号 | API-16, API-50, API-51, API-53 | EXT-06 | ERR-16, ERR-17, ERR-19 |
 | FR-27 曲率 | API-16, API-52, API-53 | EXT-06 | — |
@@ -252,7 +252,7 @@ flowchart LR
 | FR-10 対称性 | TC-U06, TC-F12, TC-F13 |
 | FR-11 座標系の変換 | TC-U08, TC-I04, TC-F10, TC-R04 |
 | FR-12 成分の取り出し | TC-U05, TC-F11 |
-| FR-13 エラー文 | TC-F01〜TC-F18, TC-F20〜TC-F27 |
+| FR-13 エラー文 | TC-F01〜TC-F18, TC-F20〜TC-F28 |
 | FR-14 例題 | TC-E01〜TC-E11 |
 | FR-15 共変微分 | TC-U12 |
 | FR-16 自動微分の数値の型 | TC-U09, TC-F18 |
@@ -262,7 +262,7 @@ flowchart LR
 | FR-21 数値微分 | TC-U26 |
 | FR-22 誤差の許容値と失敗の知らせ | TC-U20, TC-U27, TC-U28 |
 | FR-31 イベント検出 | TC-U29, TC-E10 |
-| FR-30 利用者が与える Jacobi 行列 | TC-U30, TC-F24, TC-F25, TC-F26, TC-F27, TC-E05 |
+| FR-30 利用者が与える Jacobi 行列 | TC-U30, TC-F24, TC-F25, TC-F26, TC-F27, TC-F28, TC-E05 |
 | FR-25 テンソル場 | TC-U12 |
 | FR-26 Christoffel 記号 | TC-U10, TC-U14, TC-F16, TC-F17, TC-F20 |
 | FR-27 曲率 | TC-U11, TC-U14, TC-U15, TC-U16, TC-I08, TC-E07 |

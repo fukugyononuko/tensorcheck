@@ -58,12 +58,16 @@ impl Jacobian {
     /// The Jacobian given by the user (API-60, FR-30), as the product
     /// `jv(t, &y, &dy)` = `J(t, y)·dy`, the sum over `j` of `∂f/∂y_j · dy_j`. `dy`
     /// has the type of the state and the result the type of the right-hand side
-    /// (ERR-23), so every entry `(i, j)` must have the dimension `[f_i]/[y_j]`: a
-    /// term of another dimension cannot be added to the sum (ERR-01). This holds
-    /// when the state and the result are types of this library (quantities,
-    /// tensors, points and tuples of them). A state type of your own implements
-    /// `VectorSpace`, and implementing `JacobianReturns` for it replaces the check,
-    /// as `RhsReturns` does for the right-hand side (issue #55).
+    /// (ERR-23). The entries are checked as far as `jv` is written with
+    /// quantities: a term `∂f_i/∂y_j · dy_j` built from a component of `dy` taken
+    /// as a quantity (`dy.0` of a tuple, `dy.at((X,))` of a tensor) must have the
+    /// dimension `[f_i]`, or it cannot be added to the sum (ERR-01) or put into
+    /// the result (ERR-21, ERR-23). Components taken out as plain numbers
+    /// (`components_in`, and the coordinates of a `Point`, which are read only
+    /// as numbers) are not checked; for a `Point` state only the type of the
+    /// result is (issue #56). A state type of your own implements `VectorSpace`,
+    /// and implementing `JacobianReturns` for it replaces the check, as
+    /// `RhsReturns` does for the right-hand side (issue #55).
     ///
     /// `jv` must be linear in `dy`; the solver builds the matrix from the products
     /// with the unit vectors of the state in base units, at the start of every
