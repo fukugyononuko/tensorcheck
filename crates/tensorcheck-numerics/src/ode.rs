@@ -59,7 +59,11 @@ impl Jacobian {
     /// `jv(t, &y, &dy)` = `J(t, y)·dy`, the sum over `j` of `∂f/∂y_j · dy_j`. `dy`
     /// has the type of the state and the result the type of the right-hand side
     /// (ERR-23), so every entry `(i, j)` must have the dimension `[f_i]/[y_j]`: a
-    /// term of another dimension cannot be added to the sum (ERR-01).
+    /// term of another dimension cannot be added to the sum (ERR-01). This holds
+    /// when the state and the result are types of this library (quantities,
+    /// tensors, points and tuples of them). A state type of your own implements
+    /// `VectorSpace`, and implementing `JacobianReturns` for it replaces the check,
+    /// as `RhsReturns` does for the right-hand side (issue #55).
     ///
     /// `jv` must be linear in `dy`; the solver builds the matrix from the products
     /// with the unit vectors of the state in base units, at the start of every
@@ -166,16 +170,17 @@ where
     }
 }
 
-/// An ODE method.
-pub trait Method: Copy {
+/// An ODE method. Not required to be `Copy`, so that a [`Jacobian::given`] may own
+/// and mutate its state (PR #52 review).
+pub trait Method: Sized {
     #[doc(hidden)]
     type Jac;
     #[doc(hidden)]
     fn jacobian(self) -> Self::Jac;
     #[doc(hidden)]
-    fn kind(self) -> solver::OdeKind;
+    fn kind(&self) -> solver::OdeKind;
     #[doc(hidden)]
-    fn step_limit(self) -> usize {
+    fn step_limit(&self) -> usize {
         MAX_STEPS
     }
 
@@ -216,10 +221,10 @@ impl<M: Method> Method for StepLimit<M> {
     fn jacobian(self) -> M::Jac {
         self.method.jacobian()
     }
-    fn kind(self) -> solver::OdeKind {
+    fn kind(&self) -> solver::OdeKind {
         self.method.kind()
     }
-    fn step_limit(self) -> usize {
+    fn step_limit(&self) -> usize {
         self.max_steps
     }
 }
@@ -228,7 +233,7 @@ impl Method for Rk4 {
     fn jacobian(self) -> Jacobian {
         Jacobian::Numerical
     }
-    fn kind(self) -> solver::OdeKind {
+    fn kind(&self) -> solver::OdeKind {
         solver::OdeKind::Rk4(self.h)
     }
 }
@@ -237,16 +242,16 @@ impl Method for DormandPrince54 {
     fn jacobian(self) -> Jacobian {
         Jacobian::Numerical
     }
-    fn kind(self) -> solver::OdeKind {
+    fn kind(&self) -> solver::OdeKind {
         solver::OdeKind::Dopri5
     }
 }
-impl<J: Copy> Method for Rosenbrock<J> {
+impl<J> Method for Rosenbrock<J> {
     type Jac = J;
     fn jacobian(self) -> J {
         self.jacobian
     }
-    fn kind(self) -> solver::OdeKind {
+    fn kind(&self) -> solver::OdeKind {
         solver::OdeKind::Rodas
     }
 }

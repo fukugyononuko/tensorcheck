@@ -1,6 +1,7 @@
 //! A Jacobian given by the user to the Rosenbrock method (issue #23, FR-30). TC-U30.
 
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use tensorcheck::units::si::{
     Acceleration, Dimensionless, Frequency, Length, Time, Velocity, m, one, s,
@@ -92,6 +93,34 @@ fn the_jacobian_is_evaluated_at_each_step_start_on_the_unit_vectors() {
             );
         }
     }
+}
+
+#[test]
+fn any_fnmut_accepted_by_given_can_be_used() {
+    // A closure that owns non-Copy state and mutates it (PR #52, second review).
+    let count = Rc::new(RefCell::new(0usize));
+    let seen = Rc::clone(&count);
+    let mut log: Vec<f64> = Vec::new();
+    let jv = move |t: Quantity<Time>, y: &Osc, dy: &Osc| -> OscRate {
+        log.push(t.base_value());
+        *seen.borrow_mut() = log.len();
+        damped_jv(t, y, dy)
+    };
+    let y0: Osc = (1.0 * m, 0.0 * (m / s));
+    let method = Rosenbrock {
+        jacobian: Jacobian::given(jv),
+    };
+    // Also through the step limit and the variant with on_step.
+    let sol = solve_ivp_with(
+        damped,
+        (0.0 * s)..(1.0 * s),
+        y0,
+        method.max_steps(10_000),
+        tol(1.0),
+        |_, _| {},
+    )
+    .unwrap();
+    assert_eq!(*count.borrow(), 2 * (sol.stats.steps + sol.stats.rejected));
 }
 
 #[test]
