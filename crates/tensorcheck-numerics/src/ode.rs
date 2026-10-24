@@ -299,12 +299,17 @@ pub enum SolveError<T> {
         /// The step size in base units.
         h: f64,
     },
-    /// The state or its derivative became NaN or infinite.
+    /// The state or its derivative became NaN or infinite, or so did the matrix
+    /// `I/(hγ) − J` of the [`Rosenbrock`] method.
     NonFinite {
         /// Time reached.
         t: Quantity<T>,
     },
-    /// A linear system in an implicit method was singular.
+    /// The matrix `E = I/(hγ) − J` of the [`Rosenbrock`] method is singular as
+    /// stored in `f64`, or within rounding of it: `E` is finite and has a zero
+    /// row, or LU decomposition with partial pivoting of `E`, its rows first scaled
+    /// by powers of two, meets an exactly zero pivot. The scaling is exact, so a
+    /// finite `E` is not reported so because of its scale (issue #54).
     Singular {
         /// Time reached.
         t: Quantity<T>,

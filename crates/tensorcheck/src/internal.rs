@@ -8,5 +8,7 @@ pub mod engine {
 
 /// Utilities: any layer of the numerics crate may use these.
 pub mod utility {
-    pub use crate::utility::linear::{LinearError, lu_decompose, lu_decompose_with, lu_solve};
+    pub use crate::utility::linear::{
+        LinearError, lu_decompose, lu_decompose_with, lu_solve, scale_rows,
+    };
 }

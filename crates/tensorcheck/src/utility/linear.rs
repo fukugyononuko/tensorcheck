@@ -74,7 +74,12 @@ fn row_max<N: Scalar>(a: &[N], n: usize, i: usize) -> f64 {
 /// row, and `b` with `D A`, whose entries are then of order one. Multiplying by a
 /// power of two is exact, so `A^{-1} = (D A)^{-1} D` loses nothing to the scaling.
 /// Fails if a row is zero or not finite (DD-08).
-fn scale_rows<N: Scalar>(a: &[N], n: usize, d: &mut [f64], b: &mut [N]) -> Result<(), LinearError> {
+pub fn scale_rows<N: Scalar>(
+    a: &[N],
+    n: usize,
+    d: &mut [f64],
+    b: &mut [N],
+) -> Result<(), LinearError> {
     for i in 0..n {
         let big = row_max(a, n, i);
         if big == 0.0 || !big.is_finite() {

@@ -10,7 +10,8 @@ use crate::engine::error_control::{
     judge, max_norm, next_step, pick_interval, rms_norm, valid_tolerance,
 };
 use crate::engine::ode_step::{
-    RosenbrockWork, Work, dopri5_dense, dopri5_step, hermite, illinois, rk4, rodas_step,
+    MatrixError, RosenbrockWork, Work, dopri5_dense, dopri5_step, hermite, illinois, rk4,
+    rodas_step,
 };
 use crate::engine::quadrature::{gauss_kronrod15, gauss_legendre, romberg, simpson, trapezoid};
 use crate::ode::{Solution, SolveError, Stats};
@@ -527,12 +528,16 @@ where
                     &[t_scale],
                 );
                 ft.copy_from_slice(&dfdt);
-                if rodas_step(
+                // Shrinking the step would only enlarge 1/(hγ), so neither failure
+                // is retried.
+                match rodas_step(
                     &mut rhs, t, &y, h, &f0, &jac, &ft, &mut w, &mut y_new, &mut err,
-                )
-                .is_err()
-                {
-                    return Err(SolveError::Singular { t: at(t) });
+                ) {
+                    Ok(()) => {}
+                    Err(MatrixError::Singular) => return Err(SolveError::Singular { t: at(t) }),
+                    Err(MatrixError::NonFinite) => {
+                        return Err(SolveError::NonFinite { t: at(t) });
+                    }
                 }
                 if !finite(&y_new) || !finite(&err) {
                     stats.rejected += 1;
