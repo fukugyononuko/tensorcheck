@@ -91,9 +91,25 @@ fn a_matrix_factored_without_scaling_is_factored_as_before() {
     // Scaling its rows by 2^-1024 rounds 2^-1074 to 0 and makes the rows equal
     // (PR #59 review). Only a given matrix: central differences would round the
     // tiny entry to 0 anyway.
+    // No step is rejected: a smaller step would make E regular after scaling too,
+    // which would hide a factorization that differs from before.
     let tiny = f64::MIN_POSITIVE * f64::EPSILON;
-    let y = solve([-MAX, -tiny, -MAX, 4e6], [0.0, 0.0], true).unwrap();
-    assert_eq!(y.components_in(one), [0.0, 0.0]);
+    let a = [-MAX, -tiny, -MAX, 4e6];
+    let sol = solve_ivp(
+        |_t: Quantity<Time>, _y: &Z| Vector::from_components([0.0, 0.0], one / s),
+        (0.0 * s)..(1.0 * s),
+        Vector::from_components([0.0, 0.0], one),
+        Rosenbrock {
+            jacobian: Jacobian::given(move |_t: Quantity<Time>, _y: &Z, dy: &Z| product(a, dy)),
+        },
+        Tolerance {
+            rtol: 1e-6,
+            atol: Vector::from_components([1e-310, 1e-310], one),
+        },
+    )
+    .unwrap();
+    assert_eq!(sol.y.components_in(one), [0.0, 0.0]);
+    assert_eq!(sol.stats.rejected, 0);
 }
 
 #[test]
