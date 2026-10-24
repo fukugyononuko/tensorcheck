@@ -488,9 +488,26 @@ pub mod rodas {
     pub const GAMMA: f64 = 0.25;
 }
 
+/// Why the matrix `E = I/(hγ) − J` of a Rosenbrock step could not be factored.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MatrixError {
+    /// `E` is finite, and both as it is and with its rows scaled, has a zero row or
+    /// meets an exactly zero pivot.
+    Singular,
+    /// `E` is finite, but its elimination overflows both as it is and with its rows
+    /// scaled.
+    Overflow,
+    /// `E` has an entry that is NaN or infinite (from `J`, or from `1/(hγ) − J_ii`).
+    NonFinite,
+}
+
 /// Work arrays of a Rosenbrock step.
 pub struct RosenbrockWork {
-    /// `E = I/(hγ) − J`, LU-factored in place.
+    /// `E = I/(hγ) − J` before scaling.
+    pub raw: Vec<f64>,
+    /// Row scales `D` (powers of two) of `E`.
+    pub d: Vec<f64>,
+    /// `D E`, LU-factored in place.
     pub e: Vec<f64>,
     /// Row permutation of the factorization.
     pub perm: Vec<usize>,
@@ -505,6 +522,8 @@ impl RosenbrockWork {
     /// Allocates once per solve (RES-02).
     pub fn new(n: usize) -> Self {
         RosenbrockWork {
+            raw: vec![0.0; n * n],
+            d: vec![0.0; n],
             e: vec![0.0; n * n],
             perm: vec![0; n],
             k: vec![vec![0.0; n]; 6],
@@ -518,7 +537,9 @@ impl RosenbrockWork {
 ///
 /// `f0 = f(t, y)`, `jac` the Jacobian `∂f/∂y` at `(t, y)` (row-major), `ft` the
 /// time derivative `∂f/∂t`. Writes the solution into `y_new` and the error estimate
-/// (the last stage increment) into `err`. Fails if `E` is singular.
+/// (the last stage increment) into `err`. Fails if `E` is not finite, or if LU
+/// decomposition meets an exactly zero pivot both on `E` and on `E` with its rows
+/// scaled (issue #54).
 #[allow(clippy::too_many_arguments)]
 pub fn rodas_step<F: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
     f: &mut F,
@@ -531,21 +552,52 @@ pub fn rodas_step<F: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
     w: &mut RosenbrockWork,
     y_new: &mut [f64],
     err: &mut [f64],
-) -> Result<(), tensorcheck::internal::utility::LinearError> {
+) -> Result<(), MatrixError> {
     use rodas::*;
-    use tensorcheck::internal::utility::{lu_decompose_with, lu_solve};
+    use tensorcheck::internal::utility::{lu_decompose_with, lu_solve, scale_rows};
     let n = y.len();
     let fac = 1.0 / (h * GAMMA);
     for i in 0..n {
         for j in 0..n {
-            w.e[i * n + j] = -jac[i * n + j] + if i == j { fac } else { 0.0 };
+            w.raw[i * n + j] = -jac[i * n + j] + if i == j { fac } else { 0.0 };
         }
     }
-    // Only exact singularity fails here (see `lu_decompose_with`).
-    lu_decompose_with(&mut w.e, n, &mut w.perm, false)?;
+    if !w.raw.iter().all(|x| x.is_finite()) {
+        return Err(MatrixError::NonFinite);
+    }
+    // E as it is first, as in `rodas.f`: every E factored so before issue #54 gives
+    // the same factors. Only an exactly zero or non-finite pivot fails here (see
+    // `lu_decompose_with`).
+    w.e.copy_from_slice(&w.raw);
+    w.d.fill(1.0);
+    if lu_decompose_with(&mut w.e, n, &mut w.perm, false).is_err() {
+        // Then with the rows scaled by powers of two (DD-08), so that the largest
+        // entry of each is of order one: rows near f64::MAX no longer overflow in
+        // the elimination (issue #54), though growth by partial pivoting still can
+        // (2^(n−1) at most, see below). The scaling rounds
+        // an entry only if it underflows, by at most 2^-1075 / d_i, far below the
+        // rounding of the row (ε max_j |E_ij| ≈ ε / d_i; PR #59 review).
+        scale_rows(&w.raw, n, &mut w.d, &mut w.e).map_err(|_| MatrixError::Singular)?;
+        if lu_decompose_with(&mut w.e, n, &mut w.perm, false).is_err() {
+            // The scaled entries are below about √2, but partial pivoting may still
+            // double them at each elimination: Wilkinson's matrix of size 1025
+            // overflows (PR #59 review).
+            return Err(if w.e.iter().all(|x| x.is_finite()) {
+                MatrixError::Singular
+            } else {
+                MatrixError::Overflow
+            });
+        }
+    }
     let (hd1, hd2, hd3, hd4) = (h * D[0], h * D[1], h * D[2], h * D[3]);
+    // E x = b is (D E) x = D b (D = I if E was factored as it is). Scaling b by a
+    // power of two is exact unless D b is subnormal; the error is then below
+    // 2^-1075 / d_i, far below the rounding of E's row i (about ε / d_i).
     let solve = |w: &mut RosenbrockWork, s: usize| {
         let mut b = core::mem::take(&mut w.k[s]);
+        for (x, d) in b.iter_mut().zip(&w.d) {
+            *x *= d;
+        }
         lu_solve(&w.e, n, &w.perm, &mut b);
         w.k[s] = b;
     };

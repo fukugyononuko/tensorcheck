@@ -299,12 +299,24 @@ pub enum SolveError<T> {
         /// The step size in base units.
         h: f64,
     },
-    /// The state or its derivative became NaN or infinite.
+    /// The state or its derivative became NaN or infinite, or so did the matrix
+    /// `I/(hγ) − J` of the [`Rosenbrock`] method, or its elimination at the fifth
+    /// failure to factor it (see [`SolveError::Singular`]).
     NonFinite {
         /// Time reached.
         t: Quantity<T>,
     },
-    /// A linear system in an implicit method was singular.
+    /// The matrix `E = I/(hγ) − J` of the [`Rosenbrock`] method could not be
+    /// factored for the fifth time in the solve, and was singular that time; each
+    /// time before, the step was halved and retried (`t` is the start of the step
+    /// that failed last).
+    ///
+    /// A finite `E` fails to factor when LU decomposition with partial pivoting
+    /// fails both on `E` and on `E` with its rows scaled by powers of two. It is
+    /// singular when the last failure is an exactly zero pivot or a zero row: `E`
+    /// is then singular, or within the rounding of the decomposition of it.
+    /// Otherwise the elimination overflowed, and the fifth failure is
+    /// [`SolveError::NonFinite`] instead (issue #54).
     Singular {
         /// Time reached.
         t: Quantity<T>,
