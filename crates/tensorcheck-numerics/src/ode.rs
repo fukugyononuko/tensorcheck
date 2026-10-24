@@ -305,11 +305,14 @@ pub enum SolveError<T> {
         /// Time reached.
         t: Quantity<T>,
     },
-    /// The matrix `E = I/(hγ) − J` of the [`Rosenbrock`] method is singular as
-    /// stored in `f64`, or within rounding of it: `E` is finite and has a zero
-    /// row, or LU decomposition with partial pivoting of `E`, its rows first scaled
-    /// by powers of two, meets an exactly zero pivot. The scaling is exact, so a
-    /// finite `E` is not reported so because of its scale (issue #54).
+    /// The matrix `E = I/(hγ) − J` of the [`Rosenbrock`] method was singular for
+    /// the fifth time in the solve; each time before, the step was halved and
+    /// retried (`t` is the start of the step that failed last).
+    /// `E` counts as singular when it is finite and LU decomposition with partial
+    /// pivoting meets an exactly zero pivot (or a zero row) both on `E` and on `E`
+    /// with its rows scaled by powers of two: `E` is then singular, or within the
+    /// rounding of the decomposition of it. A finite `E` is not counted so merely
+    /// because the elimination of `E` overflows (issue #54).
     Singular {
         /// Time reached.
         t: Quantity<T>,

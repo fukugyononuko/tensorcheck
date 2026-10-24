@@ -533,8 +533,9 @@ impl RosenbrockWork {
 ///
 /// `f0 = f(t, y)`, `jac` the Jacobian `∂f/∂y` at `(t, y)` (row-major), `ft` the
 /// time derivative `∂f/∂t`. Writes the solution into `y_new` and the error estimate
-/// (the last stage increment) into `err`. Fails if `E` is singular as stored or not
-/// finite (issue #54).
+/// (the last stage increment) into `err`. Fails if `E` is not finite, or if LU
+/// decomposition meets an exactly zero pivot both on `E` and on `E` with its rows
+/// scaled (issue #54).
 #[allow(clippy::too_many_arguments)]
 pub fn rodas_step<F: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
     f: &mut F,
@@ -560,23 +561,32 @@ pub fn rodas_step<F: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
     if !w.raw.iter().all(|x| x.is_finite()) {
         return Err(MatrixError::NonFinite);
     }
-    // Rows scaled by powers of two (exact, DD-08), so that the largest entry of each
-    // is of order one: eliminating a finite E then cannot overflow (issue #54; it
-    // did for rows near f64::MAX). Only a zero row fails here.
-    scale_rows(&w.raw, n, &mut w.d, &mut w.e).map_err(|_| MatrixError::Singular)?;
-    // Only an exactly zero pivot fails here (see `lu_decompose_with`); a non-finite
-    // one is reported as such, should the elimination ever grow that far.
+    // E as it is first, as in `rodas.f`: every E factored so before issue #54 gives
+    // the same factors. Only an exactly zero or non-finite pivot fails here (see
+    // `lu_decompose_with`).
+    w.e.copy_from_slice(&w.raw);
+    w.d.fill(1.0);
     if lu_decompose_with(&mut w.e, n, &mut w.perm, false).is_err() {
-        return Err(if w.e.iter().all(|x| x.is_finite()) {
-            MatrixError::Singular
-        } else {
-            MatrixError::NonFinite
-        });
+        // Then with the rows scaled by powers of two (DD-08), so that the largest
+        // entry of each is of order one: the elimination of a finite E cannot
+        // overflow (issue #54; it did for rows near f64::MAX). The scaling rounds
+        // an entry only if it underflows, by at most 2^-1075 / d_i, far below the
+        // rounding of the row (ε max_j |E_ij| ≈ ε / d_i; PR #59 review).
+        scale_rows(&w.raw, n, &mut w.d, &mut w.e).map_err(|_| MatrixError::Singular)?;
+        if lu_decompose_with(&mut w.e, n, &mut w.perm, false).is_err() {
+            // A non-finite pivot is reported as such, should the elimination of
+            // the scaled rows ever grow that far.
+            return Err(if w.e.iter().all(|x| x.is_finite()) {
+                MatrixError::Singular
+            } else {
+                MatrixError::NonFinite
+            });
+        }
     }
     let (hd1, hd2, hd3, hd4) = (h * D[0], h * D[1], h * D[2], h * D[3]);
-    // E x = b is (D E) x = D b. Scaling b by a power of two is exact unless D b
-    // is subnormal; the error is then below 2^-1074 / d_i, far below the rounding
-    // of E's row i (about ε max_j |E_ij| ≈ ε / d_i).
+    // E x = b is (D E) x = D b (D = I if E was factored as it is). Scaling b by a
+    // power of two is exact unless D b is subnormal; the error is then below
+    // 2^-1075 / d_i, far below the rounding of E's row i (about ε / d_i).
     let solve = |w: &mut RosenbrockWork, s: usize| {
         let mut b = core::mem::take(&mut w.k[s]);
         for (x, d) in b.iter_mut().zip(&w.d) {

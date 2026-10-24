@@ -494,6 +494,8 @@ where
             rhs(t, &y, &mut f0);
             let mut h = initial_step(&mut rhs, t, &y, &f0, dir, 3, &atol, rtol);
             let mut rejected_last = false;
+            // Singular matrices E so far (never reset, as `NSING` in `rodas.f`).
+            let mut singular = 0;
             while dir * (t1 - t) > 0.0 {
                 if stats.steps + stats.rejected >= max_steps {
                     return Err(SolveError::MaxSteps { t: at(t) });
@@ -528,13 +530,25 @@ where
                     &[t_scale],
                 );
                 ft.copy_from_slice(&dfdt);
-                // Shrinking the step would only enlarge 1/(hγ), so neither failure
-                // is retried.
                 match rodas_step(
                     &mut rhs, t, &y, h, &f0, &jac, &ft, &mut w, &mut y_new, &mut err,
                 ) {
                     Ok(()) => {}
-                    Err(MatrixError::Singular) => return Err(SolveError::Singular { t: at(t) }),
+                    // E = I/(hγ) − J depends on h: a smaller step can make it regular.
+                    // As in `ROSCOR` of `rodas.f` (label 80, `NSING`), halve it, and
+                    // give up at the fifth singular E of the solve (PR #59 review).
+                    Err(MatrixError::Singular) => {
+                        singular += 1;
+                        if singular >= 5 {
+                            return Err(SolveError::Singular { t: at(t) });
+                        }
+                        stats.rejected += 1;
+                        h *= 0.5;
+                        rejected_last = true;
+                        continue;
+                    }
+                    // A non-finite J does not depend on h, and a smaller step only
+                    // enlarges 1/(hγ): not retried.
                     Err(MatrixError::NonFinite) => {
                         return Err(SolveError::NonFinite { t: at(t) });
                     }

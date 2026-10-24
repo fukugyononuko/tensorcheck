@@ -1,5 +1,6 @@
 //! The linear system `E = I/(hγ) − J` of the Rosenbrock method (issue #54): failures
-//! of TC-U27. `Singular` only when `E`, as stored, is singular; overflow is not that.
+//! of TC-U27. Overflow in the elimination of a finite `E` is not `Singular`, and a
+//! singular `E` is retried with a smaller step.
 
 use tensorcheck::units::si::{Dimensionless, Frequency, Time, one, s};
 use tensorcheck::{Quantity, Vector};
@@ -81,6 +82,55 @@ fn a_finite_regular_matrix_is_not_singular_whatever_its_scale() {
             }
         }
     }
+}
+
+#[test]
+fn a_matrix_factored_without_scaling_is_factored_as_before() {
+    // From y0 = 0 with f = 0 the first step is 1e-6 s, so 1/(hγ) = 4e6 and
+    // E = [[MAX, 2^-1074], [MAX, 0]]: regular, and eliminated without overflow.
+    // Scaling its rows by 2^-1024 rounds 2^-1074 to 0 and makes the rows equal
+    // (PR #59 review). Only a given matrix: central differences would round the
+    // tiny entry to 0 anyway.
+    let tiny = f64::MIN_POSITIVE * f64::EPSILON;
+    let y = solve([-MAX, -tiny, -MAX, 4e6], [0.0, 0.0], true).unwrap();
+    assert_eq!(y.components_in(one), [0.0, 0.0]);
+}
+
+#[test]
+fn a_matrix_singular_for_one_step_is_retried_with_a_smaller_step() {
+    // y' = 4e6 y from 0: at the first step 1/(hγ) = 4e6, so E = 0 exactly. Half
+    // the step makes E = 4e6 I (PR #59 review; RODAS halves the step too).
+    for given in [true, false] {
+        let r = solve([4e6, 0.0, 0.0, 4e6], [0.0, 0.0], given);
+        let y = r.unwrap_or_else(|e| panic!("given={given}: {e:?}"));
+        assert_eq!(y.components_in(one), [0.0, 0.0], "given={given}");
+    }
+}
+
+#[test]
+fn the_fifth_singular_matrix_ends_the_solve() {
+    // E rounds to −A, singular for every step tried: one product per unit vector
+    // per attempt, and the fifth attempt gives up (`NSING` in `rodas.f`).
+    let a = [1e100; 4];
+    let calls = std::cell::Cell::new(0);
+    let jv = |_t: Quantity<Time>, _y: &Z, dy: &Z| {
+        calls.set(calls.get() + 1);
+        product(a, dy)
+    };
+    let r = solve_ivp(
+        move |_t: Quantity<Time>, y: &Z| product(a, y),
+        (0.0 * s)..(1.0 * s),
+        Vector::from_components([0.0, 0.0], one),
+        Rosenbrock {
+            jacobian: Jacobian::given(jv),
+        },
+        Tolerance {
+            rtol: 1e-6,
+            atol: Vector::from_components([1e-6, 1e-6], one),
+        },
+    );
+    assert_eq!(r.unwrap_err(), SolveError::Singular { t: 0.0 * s });
+    assert_eq!(calls.get(), 5 * 2);
 }
 
 #[test]
