@@ -494,7 +494,8 @@ where
             rhs(t, &y, &mut f0);
             let mut h = initial_step(&mut rhs, t, &y, &f0, dir, 3, &atol, rtol);
             let mut rejected_last = false;
-            // Singular matrices E so far (never reset, as `NSING` in `rodas.f`).
+            // Matrices E that could not be factored so far (never reset, as `NSING`
+            // in `rodas.f`).
             let mut singular = 0;
             while dir * (t1 - t) > 0.0 {
                 if stats.steps + stats.rejected >= max_steps {
@@ -534,13 +535,18 @@ where
                     &mut rhs, t, &y, h, &f0, &jac, &ft, &mut w, &mut y_new, &mut err,
                 ) {
                     Ok(()) => {}
-                    // E = I/(hγ) − J depends on h: a smaller step can make it regular.
-                    // As in `ROSCOR` of `rodas.f` (label 80, `NSING`), halve it, and
-                    // give up at the fifth singular E of the solve (PR #59 review).
-                    Err(MatrixError::Singular) => {
+                    // E = I/(hγ) − J depends on h: a smaller step can make it regular,
+                    // or its elimination finite. As in `ROSCOR` of `rodas.f` (label 80,
+                    // `NSING`), halve it, and give up at the fifth failure of the
+                    // solve (PR #59 review).
+                    Err(e @ (MatrixError::Singular | MatrixError::Overflow)) => {
                         singular += 1;
                         if singular >= 5 {
-                            return Err(SolveError::Singular { t: at(t) });
+                            return Err(if e == MatrixError::Singular {
+                                SolveError::Singular { t: at(t) }
+                            } else {
+                                SolveError::NonFinite { t: at(t) }
+                            });
                         }
                         stats.rejected += 1;
                         h *= 0.5;

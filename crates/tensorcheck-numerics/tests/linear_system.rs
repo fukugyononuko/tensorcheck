@@ -3,7 +3,8 @@
 //! singular `E` is retried with a smaller step.
 
 use tensorcheck::units::si::{Dimensionless, Frequency, Time, one, s};
-use tensorcheck::{Quantity, Vector};
+use tensorcheck::utility::diagnostics::{JacobianReturns, RhsReturns};
+use tensorcheck::{PerDim, Quantity, Vector, VectorSpace};
 use tensorcheck_numerics::ode::{Jacobian, Rosenbrock, SolveError, Tolerance, solve_ivp};
 
 tensorcheck::space!(Plane, 2, Dimensionless);
@@ -189,4 +190,69 @@ fn a_matrix_that_is_not_finite_is_non_finite() {
         },
     );
     assert_eq!(r.unwrap_err(), SolveError::NonFinite { t: 0.0 * s });
+}
+
+/// A state of `N` components without dimensions (a user's type, EXT).
+const N: usize = 1025;
+#[derive(Clone, Copy)]
+struct Big([f64; N]);
+impl VectorSpace for Big {
+    const LEN: usize = N;
+    fn component(&self, i: usize) -> f64 {
+        self.0[i]
+    }
+    fn from_components(mut f: impl FnMut(usize) -> f64) -> Self {
+        Big(core::array::from_fn(|i| f(i)))
+    }
+}
+impl PerDim<Time> for Big {
+    type Out = Big;
+}
+impl RhsReturns<Big> for Big {}
+impl JacobianReturns<Big> for Big {}
+
+/// `W v` for Wilkinson's matrix of size N: 1 on the diagonal and in the last
+/// column, −1 below the diagonal. Partial pivoting does not swap its rows, and the
+/// last column doubles at each elimination, to 2^(N−1) = 2^1024.
+fn wilkinson(v: &Big) -> Big {
+    let mut below = 0.0; // Σ_{j<i} v_j
+    Big(core::array::from_fn(|i| {
+        let last = if i + 1 < N { v.0[N - 1] } else { 0.0 };
+        let w = v.0[i] + last - below;
+        below += v.0[i];
+        w
+    }))
+}
+
+#[test]
+fn a_finite_matrix_whose_elimination_overflows_is_retried_with_a_smaller_step() {
+    // y' = J y from 0 with J = 4e6 I − W: the first step is 1e-6 s, so E = W, whose
+    // elimination overflows even with the rows scaled (PR #59 review). Half the
+    // step gives E = 4e6 I + W, which is diagonally dominant. The interval is just
+    // the first step, so that it is tried, as each factorization takes seconds
+    // unoptimized.
+    let jv = |_t: Quantity<Time>, _y: &Big, dy: &Big| {
+        let w = wilkinson(dy);
+        Big(core::array::from_fn(|i| 4e6 * dy.0[i] - w.0[i]))
+    };
+    let sol = solve_ivp(
+        move |t: Quantity<Time>, y: &Big| jv(t, y, y),
+        (0.0 * s)..(1e-6 * s),
+        Big([0.0; N]),
+        Rosenbrock {
+            jacobian: Jacobian::given(jv),
+        },
+        Tolerance {
+            rtol: 1e-6,
+            atol: Big([1e-6; N]),
+        },
+    )
+    .unwrap();
+    assert!(sol.y.0.iter().all(|&x| x == 0.0));
+    assert_eq!(
+        (sol.stats.rejected, sol.stats.steps),
+        (1, 2),
+        "{:?}",
+        sol.stats
+    );
 }

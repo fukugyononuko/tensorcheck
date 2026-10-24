@@ -491,8 +491,12 @@ pub mod rodas {
 /// Why the matrix `E = I/(hγ) − J` of a Rosenbrock step could not be factored.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MatrixError {
-    /// `E`, as stored, is singular: a zero row, or an exactly zero pivot.
+    /// `E` is finite, and both as it is and with its rows scaled, has a zero row or
+    /// meets an exactly zero pivot.
     Singular,
+    /// `E` is finite, but its elimination overflows both as it is and with its rows
+    /// scaled.
+    Overflow,
     /// `E` has an entry that is NaN or infinite (from `J`, or from `1/(hγ) − J_ii`).
     NonFinite,
 }
@@ -568,18 +572,20 @@ pub fn rodas_step<F: FnMut(f64, &[f64], &mut [f64]) + ?Sized>(
     w.d.fill(1.0);
     if lu_decompose_with(&mut w.e, n, &mut w.perm, false).is_err() {
         // Then with the rows scaled by powers of two (DD-08), so that the largest
-        // entry of each is of order one: the elimination of a finite E cannot
-        // overflow (issue #54; it did for rows near f64::MAX). The scaling rounds
+        // entry of each is of order one: rows near f64::MAX no longer overflow in
+        // the elimination (issue #54), though growth by partial pivoting still can
+        // (2^(n−1) at most, see below). The scaling rounds
         // an entry only if it underflows, by at most 2^-1075 / d_i, far below the
         // rounding of the row (ε max_j |E_ij| ≈ ε / d_i; PR #59 review).
         scale_rows(&w.raw, n, &mut w.d, &mut w.e).map_err(|_| MatrixError::Singular)?;
         if lu_decompose_with(&mut w.e, n, &mut w.perm, false).is_err() {
-            // A non-finite pivot is reported as such, should the elimination of
-            // the scaled rows ever grow that far.
+            // The scaled entries are below about √2, but partial pivoting may still
+            // double them at each elimination: Wilkinson's matrix of size 1025
+            // overflows (PR #59 review).
             return Err(if w.e.iter().all(|x| x.is_finite()) {
                 MatrixError::Singular
             } else {
-                MatrixError::NonFinite
+                MatrixError::Overflow
             });
         }
     }

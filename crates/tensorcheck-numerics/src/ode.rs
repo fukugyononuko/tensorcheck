@@ -300,19 +300,23 @@ pub enum SolveError<T> {
         h: f64,
     },
     /// The state or its derivative became NaN or infinite, or so did the matrix
-    /// `I/(hγ) − J` of the [`Rosenbrock`] method.
+    /// `I/(hγ) − J` of the [`Rosenbrock`] method, or its elimination at the fifth
+    /// failure to factor it (see [`SolveError::Singular`]).
     NonFinite {
         /// Time reached.
         t: Quantity<T>,
     },
-    /// The matrix `E = I/(hγ) − J` of the [`Rosenbrock`] method was singular for
-    /// the fifth time in the solve; each time before, the step was halved and
-    /// retried (`t` is the start of the step that failed last).
-    /// `E` counts as singular when it is finite and LU decomposition with partial
-    /// pivoting meets an exactly zero pivot (or a zero row) both on `E` and on `E`
-    /// with its rows scaled by powers of two: `E` is then singular, or within the
-    /// rounding of the decomposition of it. A finite `E` is not counted so merely
-    /// because the elimination of `E` overflows (issue #54).
+    /// The matrix `E = I/(hγ) − J` of the [`Rosenbrock`] method could not be
+    /// factored for the fifth time in the solve, and was singular that time; each
+    /// time before, the step was halved and retried (`t` is the start of the step
+    /// that failed last).
+    ///
+    /// A finite `E` fails to factor when LU decomposition with partial pivoting
+    /// fails both on `E` and on `E` with its rows scaled by powers of two. It is
+    /// singular when the last failure is an exactly zero pivot or a zero row: `E`
+    /// is then singular, or within the rounding of the decomposition of it.
+    /// Otherwise the elimination overflowed, and the fifth failure is
+    /// [`SolveError::NonFinite`] instead (issue #54).
     Singular {
         /// Time reached.
         t: Quantity<T>,
